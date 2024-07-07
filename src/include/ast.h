@@ -4,6 +4,7 @@
 #include <memory>
 #include <string>
 #include <iostream>
+#include <unordered_map>
 
 class BaseAST
 {
@@ -11,6 +12,7 @@ public:
     virtual ~BaseAST() = default;
 
     virtual void Dump() const = 0;
+    virtual void IR() const = 0;
 };
 
 // CompUnit  ::= FuncDef;
@@ -25,6 +27,11 @@ public:
         func_def->Dump();
         std::cout << " }";
     }
+
+    void IR() const override
+    {
+        func_def->IR();
+    }
 };
 
 // FuncDef   ::= FuncType IDENT "(" ")" Block;
@@ -35,7 +42,6 @@ public:
     std::string ident;
     std::unique_ptr<BaseAST> block;
 
-    FuncDefAST() : ident("int") {}
     void Dump() const override
     {
         std::cout << "FuncDefAST { ";
@@ -44,12 +50,23 @@ public:
         block->Dump();
         std::cout << " }";
     }
+
+    void IR() const override
+    {
+        std::cout << "fun @" << ident << "(): ";
+        func_type->IR();
+        std::cout << " { ";
+        block->IR();
+        std::cout << " }";
+    }
 };
 
 // FuncType  ::= "int";
 class FuncTypeAST : public BaseAST
 {
 public:
+    inline static std::unordered_map<std::string, std::string> ir_type = {
+        {"int", "i32"}};
     std::string type;
 
     void Dump() const override
@@ -57,6 +74,11 @@ public:
         std::cout << "FuncTypeAST { ";
         std::cout << type;
         std::cout << " }";
+    }
+
+    void IR() const override
+    {
+        std::cout << ir_type[type];
     }
 };
 
@@ -72,6 +94,12 @@ public:
         stmt->Dump();
         std::cout << " }";
     }
+
+    void IR() const override
+    {
+        std::cout << "%entry: ";
+        stmt->IR();
+    }
 };
 
 // Stmt      ::= "return" Number ";";
@@ -86,22 +114,12 @@ public:
         std::cout << number;
         std::cout << " }";
     }
+
+    void IR() const override
+    {
+        std::cout << "ret ";
+        std::cout << number;
+    }
 };
-
-// // Number    ::= INT_CONST;
-// class NumberAST : public BaseAST
-// {
-// public:
-//     std::string int_const;
-
-//     void Dump() const override
-//     {
-//         std::cout << "NumberAST { ";
-//         std::cout << int_const;
-//         std::cout << " }";
-//     }
-// };
-
-// ...
 
 #endif

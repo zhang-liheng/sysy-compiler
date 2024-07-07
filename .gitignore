@@ -1,3 +1,4 @@
-build
-debug
-run_container.bat
+/build
+/debug
+run_hello.bat
+run_test.bat

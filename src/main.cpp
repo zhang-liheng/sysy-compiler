@@ -1,6 +1,8 @@
 #include <cassert>
 #include <cstdio>
 #include <iostream>
+#include <fstream>
+#include <streambuf>
 #include <memory>
 #include <string>
 
@@ -34,7 +36,15 @@ int main(int argc, const char *argv[])
     auto ret = yyparse(ast);
     assert(!ret);
 
-    // 输出解析得到的 AST, 其实就是个字符串
-    ast->Dump();
+    // 重定向cout到output
+    std::ofstream outfile(output);
+    std::streambuf *old_cout_buf = std::cout.rdbuf(outfile.rdbuf());
+
+    // 输出解析得到的 Koopa IR, 其实就是个字符串
+    ast->IR();
+
+    // 恢复cout
+    std::cout.rdbuf(old_cout_buf);
+
     return 0;
 }
