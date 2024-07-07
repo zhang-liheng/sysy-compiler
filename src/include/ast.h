@@ -12,7 +12,7 @@ public:
     virtual ~BaseAST() = default;
 
     virtual void Dump() const = 0;
-    virtual void IR() const = 0;
+    virtual void IR(std::ostream &os) const = 0;
 };
 
 // CompUnit  ::= FuncDef;
@@ -28,9 +28,10 @@ public:
         std::cout << " }";
     }
 
-    void IR() const override
+    void IR(std::ostream &os = std::cout) const override
     {
-        func_def->IR();
+        func_def->IR(os);
+        os << std::endl;
     }
 };
 
@@ -51,13 +52,13 @@ public:
         std::cout << " }";
     }
 
-    void IR() const override
+    void IR(std::ostream &os = std::cout) const override
     {
-        std::cout << "fun @" << ident << "(): ";
-        func_type->IR();
-        std::cout << " { ";
-        block->IR();
-        std::cout << " }";
+        os << "fun @" << ident << "(): ";
+        func_type->IR(os);
+        os << " { ";
+        block->IR(os);
+        os << " }";
     }
 };
 
@@ -76,9 +77,9 @@ public:
         std::cout << " }";
     }
 
-    void IR() const override
+    void IR(std::ostream &os = std::cout) const override
     {
-        std::cout << ir_type[type];
+        os << ir_type[type];
     }
 };
 
@@ -95,10 +96,10 @@ public:
         std::cout << " }";
     }
 
-    void IR() const override
+    void IR(std::ostream &os = std::cout) const override
     {
-        std::cout << "%entry: ";
-        stmt->IR();
+        os << "%entry: ";
+        stmt->IR(os);
     }
 };
 
@@ -115,10 +116,10 @@ public:
         std::cout << " }";
     }
 
-    void IR() const override
+    void IR(std::ostream &os = std::cout) const override
     {
-        std::cout << "ret ";
-        std::cout << number;
+        os << "ret ";
+        os << number;
     }
 };
 

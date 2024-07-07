@@ -1,4 +1,6 @@
 /build
 /debug
+/include
 run_hello.bat
 run_test.bat
+hello.koopa

@@ -2,9 +2,10 @@
 #include <cstdio>
 #include <iostream>
 #include <fstream>
-#include <streambuf>
-#include <memory>
+#include <sstream>
 #include <string>
+#include <memory>
+#include <cstring>
 
 #include "include/ast.h"
 
@@ -36,15 +37,23 @@ int main(int argc, const char *argv[])
     auto ret = yyparse(ast);
     assert(!ret);
 
-    // 重定向cout到output
-    std::ofstream outfile(output);
-    std::streambuf *old_cout_buf = std::cout.rdbuf(outfile.rdbuf());
+    std::ofstream outfile(output, std::ios::out | std::ios::trunc);
+    assert(outfile.is_open());
 
-    // 输出解析得到的 Koopa IR, 其实就是个字符串
-    ast->IR();
-
-    // 恢复cout
-    std::cout.rdbuf(old_cout_buf);
+    if (!strcmp(mode, "-koopa"))
+    {
+        // 输出解析得到的 Koopa IR, 其实就是个字符串
+        ast->IR(outfile);
+    }
+    else if (!strcmp(mode, "-riscv"))
+    {
+        std::stringstream ss;
+        ast->IR(ss);
+    }
+    else
+    {
+        std::cerr << "Error: invalid mode." << std::endl;
+    }
 
     return 0;
 }
