@@ -8,6 +8,14 @@
 #include <cstring>
 
 #include "include/ast.h"
+#include "include/riscv.h"
+
+// #define DEBUG
+#ifdef DEBUG
+#define dbg_printf(...) fprintf(stderr, __VA_ARGS__)
+#else
+#define dbg_printf(...)
+#endif
 
 using namespace std;
 
@@ -40,6 +48,8 @@ int main(int argc, const char *argv[])
     std::ofstream outfile(output, std::ios::out | std::ios::trunc);
     assert(outfile.is_open());
 
+    dbg_printf("in IR\n");
+
     if (!strcmp(mode, "-koopa"))
     {
         // 输出解析得到的 Koopa IR, 其实就是个字符串
@@ -49,6 +59,8 @@ int main(int argc, const char *argv[])
     {
         std::stringstream ss;
         ast->IR(ss);
+        KoopaRiscvBuilder builder;
+        builder.BuildRiscv(ss.str(), outfile);
     }
     else
     {

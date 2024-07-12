@@ -14,6 +14,13 @@
 
 #include "include/ast.h"
 
+// #define DEBUG
+#ifdef DEBUG
+#define dbg_printf(...) fprintf(stderr, __VA_ARGS__)
+#else
+#define dbg_printf(...)
+#endif
+
 // 声明 lexer 函数和错误处理函数
 int yylex();
 void yyerror(std::unique_ptr<BaseAST> &ast, const char *s);
@@ -33,20 +40,21 @@ using namespace std;
 // 至于为什么要用字符串指针而不直接用 string 或者 unique_ptr<string>?
 // 请自行 STFW 在 union 里写一个带析构函数的类会出现什么情况
 %union {
-    std::string *str_val;
     int int_val;
+    std::string *str_val;
     BaseAST *ast_val;
 }
 
 // lexer 返回的所有 token 种类的声明
 // 注意 IDENT 和 INT_CONST 会返回 token 的值, 分别对应 str_val 和 int_val
-%token INT RETURN
+%token INT RETURN LT GT LE GE EQ NE LAND LOR
 %token <str_val> IDENT
 %token <int_val> INT_CONST
 
 // 非终结符的类型定义
-%type <ast_val> CompUnit FuncDef FuncType Block Stmt
+%type <ast_val> CompUnit FuncDef FuncType Block Stmt Exp UnaryExp PrimaryExp AddExp MulExp LOrExp LAndExp EqExp RelExp
 %type <int_val> Number
+%type <str_val> UnaryOp
 
 %%
 
@@ -57,6 +65,7 @@ using namespace std;
 // $1 指代规则里第一个符号的返回值, 也就是 FuncDef 的返回值
 CompUnit
   : FuncDef {
+    dbg_printf("in CompUnit\n");
     auto comp_unit = make_unique<CompUnitAST>();
     comp_unit->func_def = unique_ptr<BaseAST>($1);
     ast = move(comp_unit);
@@ -75,6 +84,8 @@ CompUnit
 // 这种写法会省下很多内存管理的负担
 FuncDef
   : FuncType IDENT '(' ')' Block {
+    dbg_printf("in FuncDef\n");
+
     auto ast = new FuncDefAST();
     ast->func_type = unique_ptr<BaseAST>($1);
     ast->ident = *unique_ptr<string>($2);
@@ -86,6 +97,8 @@ FuncDef
 // 同上, 不再解释
 FuncType
   : INT {
+    dbg_printf("in FuncType\n");
+
     auto ast = new FuncTypeAST();
     ast->type = "int";
     $$ = ast;
@@ -94,6 +107,8 @@ FuncType
 
 Block
   : '{' Stmt '}' {
+    dbg_printf("in Block\n");
+
     auto ast = new BlockAST();
     ast->stmt = unique_ptr<BaseAST>($2);
     $$ = ast;
@@ -101,12 +116,215 @@ Block
   ;
 
 Stmt
-  : RETURN Number ';' {
+  : RETURN Exp ';' {
+    dbg_printf("in Stmt\n");
+
     auto ast = new StmtAST();
-    ast->number = $2;
+    ast->exp = unique_ptr<BaseAST>($2);
     $$ = ast;
   }
   ;
+
+Exp
+  : LOrExp {
+    dbg_printf("in Exp\n");
+
+    auto ast = new ExpAST();
+    ast->lor_exp = unique_ptr<BaseAST>($1);
+    $$ = ast;
+  }
+  ;
+
+LOrExp
+  : LAndExp {
+    auto ast = new LOrExpAST(LOrExpType::LAnd);
+    ast->land_exp = unique_ptr<BaseAST>($1);
+    $$ = ast;
+  }
+  | LOrExp LOR LAndExp {
+    auto ast = new LOrExpAST(LOrExpType::LOr);
+    ast->lor_exp = unique_ptr<BaseAST>($1);
+    ast->land_exp = unique_ptr<BaseAST>($3);
+    $$ = ast;
+  }
+  ;
+
+LAndExp
+  : EqExp {
+    auto ast = new LAndExpAST(LAndExpType::Eq);
+    ast->eq_exp = unique_ptr<BaseAST>($1);
+    $$ = ast;
+  }
+  | LAndExp LAND EqExp {
+    auto ast = new LAndExpAST(LAndExpType::LAnd);
+    ast->land_exp = unique_ptr<BaseAST>($1);
+    ast->eq_exp = unique_ptr<BaseAST>($3);
+    $$ = ast;
+  }
+  ;
+
+EqExp
+  : RelExp {
+    auto ast = new EqExpAST(EqExpType::Rel);
+    ast->rel_exp = unique_ptr<BaseAST>($1);
+    $$ = ast;
+  }
+  | EqExp EQ RelExp {
+    auto ast = new EqExpAST(EqExpType::Eq);
+    ast->eq_exp = unique_ptr<BaseAST>($1);
+    ast->op = "==";
+    ast->rel_exp = unique_ptr<BaseAST>($3);
+    $$ = ast;
+  }
+  | EqExp NE RelExp {
+    auto ast = new EqExpAST(EqExpType::Eq);
+    ast->eq_exp = unique_ptr<BaseAST>($1);
+    ast->op = "!=";
+    ast->rel_exp = unique_ptr<BaseAST>($3);
+    $$ = ast;
+  }
+  ;
+
+RelExp
+  : AddExp {
+    auto ast = new RelExpAST(RelExpType::Add);
+    ast->add_exp = unique_ptr<BaseAST>($1);
+    $$ = ast;
+  }
+  | RelExp LT AddExp {
+    auto ast = new RelExpAST(RelExpType::Rel);
+    ast->rel_exp = unique_ptr<BaseAST>($1);
+    ast->op = "<";
+    ast->add_exp = unique_ptr<BaseAST>($3);
+    $$ = ast;
+  }
+  | RelExp GT AddExp {
+    auto ast = new RelExpAST(RelExpType::Rel);
+    ast->rel_exp = unique_ptr<BaseAST>($1);
+    ast->op = ">";
+    ast->add_exp = unique_ptr<BaseAST>($3);
+    $$ = ast;
+  }
+  | RelExp LE AddExp {
+    auto ast = new RelExpAST(RelExpType::Rel);
+    ast->rel_exp = unique_ptr<BaseAST>($1);
+    ast->op = "<=";
+    ast->add_exp = unique_ptr<BaseAST>($3);
+    $$ = ast;
+  }
+  | RelExp GE AddExp {
+    auto ast = new RelExpAST(RelExpType::Rel);
+    ast->rel_exp = unique_ptr<BaseAST>($1);
+    ast->op = ">=";
+    ast->add_exp = unique_ptr<BaseAST>($3);
+    $$ = ast;
+  }
+  ;
+
+AddExp
+  : MulExp {
+    dbg_printf("in AddExp\n");
+
+    auto ast = new AddExpAST(AddExpType::Mul);
+    ast->mul_exp = unique_ptr<BaseAST>($1);
+    $$ = ast;
+  }
+  | AddExp '+' MulExp {
+    auto ast = new AddExpAST(AddExpType::Add);
+    ast->add_exp = unique_ptr<BaseAST>($1);
+    ast->op = "+";
+    ast->mul_exp = unique_ptr<BaseAST>($3);
+    $$ = ast;
+  }
+  | AddExp '-' MulExp {
+    auto ast = new AddExpAST(AddExpType::Add);
+    ast->add_exp = unique_ptr<BaseAST>($1);
+    ast->op = "-";
+    ast->mul_exp = unique_ptr<BaseAST>($3);
+    $$ = ast;
+  }
+  ;
+
+MulExp
+  : UnaryExp {
+    auto ast = new MulExpAST(MulExpType::Unary);
+    ast->unary_exp = unique_ptr<BaseAST>($1);
+    $$ = ast;
+  }
+  | MulExp '*' UnaryExp {
+    auto ast = new MulExpAST(MulExpType::Mul);
+    ast->mul_exp = unique_ptr<BaseAST>($1);
+    ast->op = "*";
+    ast->unary_exp = unique_ptr<BaseAST>($3);
+    $$ = ast;
+  }
+  | MulExp '/' UnaryExp {
+    auto ast = new MulExpAST(MulExpType::Mul);
+    ast->mul_exp = unique_ptr<BaseAST>($1);
+    ast->op = "/";
+    ast->unary_exp = unique_ptr<BaseAST>($3);
+    $$ = ast;
+  }
+  | MulExp '%' UnaryExp {
+    auto ast = new MulExpAST(MulExpType::Mul);
+    ast->mul_exp = unique_ptr<BaseAST>($1);
+    ast->op = "%";
+    ast->unary_exp = unique_ptr<BaseAST>($3);
+    $$ = ast;
+  }
+  ;
+
+
+UnaryExp
+  : PrimaryExp {
+    dbg_printf("in UnaryExp\n");
+
+    auto ast = new UnaryExpAST(UnaryExpType::Primary);
+    ast->primary_exp = unique_ptr<BaseAST>($1);
+    $$ = ast;
+  }
+  | UnaryOp UnaryExp {
+    dbg_printf("in UnaryExp\n");
+
+    auto ast = new UnaryExpAST(UnaryExpType::Op);
+    ast->unary_op = *unique_ptr<string>($1);
+    ast->unary_exp = unique_ptr<BaseAST>($2);
+    $$ = ast;
+  }
+  ;
+
+PrimaryExp
+  : '(' Exp ')' {
+    dbg_printf("in PrimaryExp\n");
+
+    auto ast = new PrimaryExpAST(PrimaryExpType::Exp);
+    ast->exp = unique_ptr<BaseAST>($2);
+    $$ = ast;
+  }
+  | Number {
+    dbg_printf("in PrimaryExp\n");
+
+    auto ast = new PrimaryExpAST(PrimaryExpType::Number);
+    ast->number = $1;
+    $$ = ast;
+  }
+  ;
+
+UnaryOp
+  : '+' { 
+    auto op = new string("+");
+    $$ = op;
+  }
+  | '-' {
+    auto op = new string("-");
+    $$ = op;
+  }
+  | '!' { 
+    auto op = new string("!");
+    $$ = op;
+  }
+  ;
+
 
 Number
   : INT_CONST {

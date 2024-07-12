@@ -1,6 +1,11 @@
+/.vscode
 /build
 /debug
-/include
+/src/include/koopa.h
 run_hello.bat
 run_test.bat
+hello
 hello.koopa
+test.cpp
+test.exe
+TODO
