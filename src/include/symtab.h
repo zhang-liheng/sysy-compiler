@@ -17,11 +17,12 @@
 
 /**
  * 符号表symbol table.
- * 符号表中符号(symbol)的定义与ast中的symbol不同.
- * ast中的符号包括koopa IR中的所有符号，即源程序本来就有的、在IR中以"@"开头的符号，
- * 或者为表达式生成的、以"%"开头的符号，或者编译期可求值的常量。
- * 而symtab.h符号表中的符号，只包括源程序中定义的变量和常量。
+ * 符号表符号的定义与ast中的Koopa IR符号不同.
+ * Koopa IR符号包括源程序中的常量（以数字表示）、变量（以@[变量符号]_[序号]表示），
+ * 以及为表达式生成的、以"%"开头的符号. 符号表符号只包括源程序中定义的变量和常量.
  */
+
+// TODO 为给变量分配Koopa IR符号，要支持查询同名变量出现次数
 
 enum class SymbolTag
 {
@@ -30,14 +31,14 @@ enum class SymbolTag
 };
 
 /**
- * TODO 目前变量不需要存东西，之后可能需要改成一个tagged union之类的
+ * TODO 可能需要改成一个tagged union之类的
  *
  */
 class SymbolInfo
 {
 public:
     SymbolTag tag;
-    std::string symbol; // koopa IR中的符号
+    std::string symbol; // koopa IR符号
     SymbolInfo(const SymbolTag tag, const std::string &symbol) : tag(tag), symbol(symbol) {}
 };
 

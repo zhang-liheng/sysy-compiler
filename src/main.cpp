@@ -45,22 +45,38 @@ int main(int argc, const char *argv[])
     auto ret = yyparse(ast);
     assert(!ret);
 
-    std::ofstream outfile(output, std::ios::out | std::ios::trunc);
+    std::ofstream outfile(output);
     assert(outfile.is_open());
 
     dbg_printf("in IR\n");
 
     if (!strcmp(mode, "-koopa"))
     {
+        // 保存cout当前的缓冲区指针
+        auto cout_buf = std::cout.rdbuf();
+        // 重定向cout到outfile
+        std::cout.rdbuf(outfile.rdbuf());
         // 输出解析得到的 Koopa IR, 其实就是个字符串
-        ast->IR(outfile);
+        ast->IR();
+        // 恢复cout的原始缓冲区，以便恢复到标准输出
+        std::cout.rdbuf(cout_buf);
     }
     else if (!strcmp(mode, "-riscv"))
     {
         std::stringstream ss;
-        ast->IR(ss);
+        // 保存cout当前的缓冲区指针
+        auto cout_buf = std::cout.rdbuf();
+        // 重定向cout到ss
+        std::cout.rdbuf(ss.rdbuf());
+        // 输出解析得到的 Koopa IR, 其实就是个字符串
+        ast->IR();
+        // 重定向cout到outfile
+        std::cout.rdbuf(outfile.rdbuf());
+        // 生成目标代码
         KoopaRiscvBuilder builder;
-        builder.BuildRiscv(ss.str(), outfile);
+        builder.BuildRiscv(ss.str());
+        // 恢复cout的原始缓冲区，以便恢复到标准输出
+        std::cout.rdbuf(cout_buf);
     }
     else
     {
