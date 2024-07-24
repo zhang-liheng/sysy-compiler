@@ -295,11 +295,37 @@ Stmt
     ast->exp = unique_ptr<BaseAST>($3);
     $$ = ast;
   }
+  | Exp ';' {
+    dbg_printf("in Stmt\n");
+    auto ast = new StmtAST();
+    ast->tag = StmtAST::Tag::EXP;
+    ast->exp = unique_ptr<BaseAST>($1);
+    $$ = ast;
+  }
+  | ';' {
+    dbg_printf("in Stmt\n");
+    auto ast = new StmtAST();
+    ast->tag = StmtAST::Tag::EXP;
+    $$ = ast;
+  }
+  | Block {
+    dbg_printf("in Stmt\n");
+    auto ast = new StmtAST();
+    ast->tag = StmtAST::Tag::BLOCK;
+    ast->block = unique_ptr<BaseAST>($1);
+    $$ = ast;
+  }
   | RETURN Exp ';' {
     dbg_printf("in Stmt\n");
     auto ast = new StmtAST();
     ast->tag = StmtAST::Tag::RETURN;
     ast->exp = unique_ptr<BaseAST>($2);
+    $$ = ast;
+  }
+  | RETURN ';' {
+    dbg_printf("in Stmt\n");
+    auto ast = new StmtAST();
+    ast->tag = StmtAST::Tag::RETURN;
     $$ = ast;
   }
   ;

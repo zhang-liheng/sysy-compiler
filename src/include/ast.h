@@ -39,7 +39,7 @@
 
 static int sym_cnt = 0;
 
-static SymbolTableUnit sym_tab;
+static SymbolTable sym_tab;
 
 /**
  * @brief 按照官方文档的写法，所有成员变量均为public，不提供get方法
@@ -60,7 +60,7 @@ public:
     virtual ~BaseAST() = default;
 
     /**
-     * @brief 输出AST的结构，基本没用，也没实现
+     * @brief 按照官方文档的写法，输出AST的结构，基本没用，没有实现
      */
     virtual void Dump() const = 0;
 
@@ -68,9 +68,11 @@ public:
      * @brief   语义分析和IR生成
      *
      * 以递归形式后序遍历AST树。
-     * 首先调用成员AST的IR方法，该方法会设置其is_const和symbol,
-     * 生成Koopa IR，插入符号表；
-     * 然后设置is_const, symbol, 生成Koopa IR，插入符号表。
+     * 1. 调用成员AST的IR方法，该方法会设置其is_const, symbol, 符号表，生成Koopa IR
+     * 2. 设置is_const
+     * 3. 设置symbol
+     * 4. 插入符号表
+     * 5. 生成Koopa IR
      */
     virtual void IR() = 0;
 };
@@ -137,6 +139,7 @@ public:
         std::cout << "fun @" << ident << "(): ";
         func_type->IR();
         std::cout << " {" << std::endl;
+        std::cout << "%entry:" << std::endl; // TODO 权宜之计
         block->IR();
         std::cout << "}" << std::endl;
         // TODO 无需symbol
@@ -188,11 +191,12 @@ public:
     void IR() override
     {
         dbg_printf("in BlockAST\n");
-        std::cout << "%entry:" << std::endl; // TODO 权宜之计
+        sym_tab.push();
         for (auto &item : block_items)
         {
             item->IR();
         }
+        sym_tab.pop();
         // TODO 无需symbol
     }
 };
@@ -304,7 +308,6 @@ public:
     }
 };
 
-// TODO 以下的AST节点的IR方法需要实现
 /**
  * @brief VarDef        ::= IDENT | IDENT "=" InitVal;
  */
@@ -318,14 +321,15 @@ public:
 
     void IR() override
     {
-        // TODO 不需要is_const和symbol
+        // TODO 不需要is_const
         is_const = false;
+        symbol = "@" + ident + "_" + std::to_string(sym_tab.count(ident) + 1);
         sym_tab.insert(ident, SymbolTag::VAR, symbol);
-        std::cout << "  @" << ident << " = alloc i32" << std::endl;
+        std::cout << "  " << symbol << " = alloc i32" << std::endl;
         if (init_val)
         {
             init_val->IR();
-            std::cout << "  store " << init_val->symbol << ", @" << ident << std::endl;
+            std::cout << "  store " << init_val->symbol << ", " << symbol << std::endl;
         }
     }
 };
@@ -405,8 +409,10 @@ public:
 };
 
 /**
- * @brief Stmt          ::= LVal "=" Exp ";"
- *                      | "return" Exp ";";
+ * @brief Stmt ::= LVal "=" Exp ";"
+ *              | [Exp] ";"
+ *              | Block
+ *              | "return" [Exp] ";";
  */
 class StmtAST : public BaseAST
 {
@@ -414,10 +420,13 @@ public:
     enum class Tag
     {
         LVAL,
+        EXP,
+        BLOCK,
         RETURN
     } tag;
     std::unique_ptr<LValAST> lval;
     std::unique_ptr<BaseAST> exp;
+    std::unique_ptr<BaseAST> block;
 
     void Dump() const override
     {
@@ -429,18 +438,37 @@ public:
     void IR() override
     {
         dbg_printf("in StmtAST\n");
-        exp->IR();
-        if (tag == Tag::LVAL)
+        if (tag == Tag::BLOCK)
+        {
+            block->IR();
+        }
+        else if (tag == Tag::EXP)
+        {
+            if (exp)
+            {
+                exp->IR();
+            }
+        }
+        else if (tag == Tag::LVAL)
         {
             lval->IR();
+            exp->IR();
             auto sym_info = sym_tab[lval->ident];
             assert(sym_info->tag == SymbolTag::VAR);
             // TODO 不需要is_const和symbol
-            std::cout << "  store " << exp->symbol << ", @" << lval->ident << std::endl;
+            std::cout << "  store " << exp->symbol << ", " << sym_info->symbol << std::endl;
         }
         else
         {
-            std::cout << "  ret " << exp->symbol << std::endl;
+            if (exp)
+            {
+                exp->IR();
+                std::cout << "  ret " << exp->symbol << std::endl;
+            }
+            else
+            {
+                std::cout << "  ret" << std::endl;
+            }
         }
         // TODO 无需is_const, symbol
     }
@@ -972,7 +1000,8 @@ public:
             else
             {
                 symbol = "%" + std::to_string(sym_cnt++);
-                std::cout << "  " << symbol << " = load @" << lval->ident << std::endl;
+                std::cout << "  " << symbol << " = load "
+                          << sym_info->symbol << std::endl;
             }
         }
         else
