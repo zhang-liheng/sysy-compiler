@@ -22,18 +22,12 @@
  * 以及为表达式生成的、以"%"开头的符号. 符号表符号只包括源程序中定义的变量和常量.
  */
 
-// TODO symtab.h中存变量对应的Koopa IR符号，ast.h中定义变量时分配Koopa IR符号并存储
-
 enum class SymbolTag
 {
     CONST,
     VAR
 };
 
-/**
- * TODO 可能需要改成一个tagged union之类的
- *
- */
 class SymbolInfo
 {
 public:

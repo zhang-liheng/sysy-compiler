@@ -27,36 +27,16 @@
  * 3. 这是一种妥协，将SSA形式和稀疏条件常量传播留到最后再做。
  */
 
-/**
- * TODO 带变量的表达式求值   在掌管声明的AST插入符号表
- *                      求值时从符号表中拿到值，还没做
- * 目前无需判断是否在符号表中，因为程序一定符合语义规范
- * 等到作用域时才需判断
- *
- * 求值后将新的变量插入符号表中
- *
- */
-
 static int sym_cnt = 0;
 
 static SymbolTable sym_tab;
 
 /**
  * @brief 按照官方文档的写法，所有成员变量均为public，不提供get方法
- *
- * TODO 可能可以为表达式设计一个单独的基类
  */
 class BaseAST
 {
 public:
-    /**
-     * AST对应的Koopa IR符号，若是表达式，会尽量在编译期求值，
-     * 若能求值，则为其值，若不能，则为符号
-     */
-    std::string symbol;
-    // 是否为常量
-    bool is_const;
-
     virtual ~BaseAST() = default;
 
     /**
@@ -75,6 +55,15 @@ public:
      * 5. 生成Koopa IR
      */
     virtual void IR() = 0;
+};
+
+class ExpBaseAST : public BaseAST
+{
+public:
+    // AST对应的Koopa IR符号，若能求值，则为其值，若不能，则为符号
+    std::string symbol;
+    // 是否为常量
+    bool is_const;
 };
 
 /**
@@ -109,7 +98,6 @@ public:
     {
         dbg_printf("in CompUnitAST\n");
         func_def->IR();
-        // TODO 无需symbol
     }
 };
 
@@ -142,7 +130,6 @@ public:
         std::cout << "%entry:" << std::endl; // TODO 权宜之计
         block->IR();
         std::cout << "}" << std::endl;
-        // TODO 无需symbol
     }
 };
 
@@ -167,7 +154,6 @@ public:
     {
         dbg_printf("in FuncTypeAST\n");
         std::cout << type_ir[type];
-        // TODO 无需symbol
     }
 };
 
@@ -197,7 +183,6 @@ public:
             item->IR();
         }
         sym_tab.pop();
-        // TODO 无需symbol
     }
 };
 
@@ -230,7 +215,6 @@ public:
         default:
             assert(false);
         }
-        // TODO 无需symbol
     }
 };
 
@@ -260,7 +244,6 @@ public:
         {
             var_decl->IR();
         }
-        // TODO 无需symbol
     }
 };
 
@@ -283,7 +266,6 @@ public:
         {
             def->IR();
         }
-        // TODO 无需symbol
     }
 };
 
@@ -304,7 +286,6 @@ public:
         {
             def->IR();
         }
-        // TODO 无需symbol
     }
 };
 
@@ -315,15 +296,13 @@ class VarDefAST : public BaseAST
 {
 public:
     std::string ident;
-    std::unique_ptr<BaseAST> init_val;
+    std::unique_ptr<ExpBaseAST> init_val;
 
     void Dump() const override {}
 
     void IR() override
     {
-        // TODO 不需要is_const
-        is_const = false;
-        symbol = "@" + ident + "_" + std::to_string(sym_tab.count(ident) + 1);
+        auto symbol = "@" + ident + "_" + std::to_string(sym_tab.count(ident) + 1);
         sym_tab.insert(ident, SymbolTag::VAR, symbol);
         std::cout << "  " << symbol << " = alloc i32" << std::endl;
         if (init_val)
@@ -337,17 +316,17 @@ public:
 /**
  * @brief InitVal       ::= Exp;
  */
-class InitValAST : public BaseAST
+class InitValAST : public ExpBaseAST
 {
 public:
-    std::unique_ptr<BaseAST> exp;
+    std::unique_ptr<ExpBaseAST> exp;
 
     void Dump() const override {}
 
     void IR() override
     {
         exp->IR();
-        is_const = exp->is_const; // TODO
+        is_const = exp->is_const;
         symbol = exp->symbol;
     }
 };
@@ -359,26 +338,24 @@ class ConstDefAST : public BaseAST
 {
 public:
     std::string ident;
-    std::unique_ptr<BaseAST> const_init_val;
+    std::unique_ptr<ExpBaseAST> const_init_val;
 
     void Dump() const override {}
 
     void IR() override
     {
         const_init_val->IR();
-        is_const = const_init_val->is_const; // TODO 不需要
-        symbol = const_init_val->symbol;
-        sym_tab.insert(ident, SymbolTag::CONST, symbol);
+        sym_tab.insert(ident, SymbolTag::CONST, const_init_val->symbol);
     }
 };
 
 /**
  * @brief ConstInitVal  ::= ConstExp;
  */
-class ConstInitValAST : public BaseAST
+class ConstInitValAST : public ExpBaseAST
 {
 public:
-    std::unique_ptr<BaseAST> const_exp;
+    std::unique_ptr<ExpBaseAST> const_exp;
 
     void Dump() const override {}
 
@@ -393,10 +370,10 @@ public:
 /**
  * @brief ConstExp      ::= Exp;
  */
-class ConstExpAST : public BaseAST
+class ConstExpAST : public ExpBaseAST
 {
 public:
-    std::unique_ptr<BaseAST> exp;
+    std::unique_ptr<ExpBaseAST> exp;
 
     void Dump() const override {}
 
@@ -425,7 +402,7 @@ public:
         RETURN
     } tag;
     std::unique_ptr<LValAST> lval;
-    std::unique_ptr<BaseAST> exp;
+    std::unique_ptr<ExpBaseAST> exp;
     std::unique_ptr<BaseAST> block;
 
     void Dump() const override
@@ -455,7 +432,6 @@ public:
             exp->IR();
             auto sym_info = sym_tab[lval->ident];
             assert(sym_info->tag == SymbolTag::VAR);
-            // TODO 不需要is_const和symbol
             std::cout << "  store " << exp->symbol << ", " << sym_info->symbol << std::endl;
         }
         else
@@ -470,17 +446,16 @@ public:
                 std::cout << "  ret" << std::endl;
             }
         }
-        // TODO 无需is_const, symbol
     }
 };
 
 /**
  * @brief Exp         ::= LOrExp;
  */
-class ExpAST : public BaseAST
+class ExpAST : public ExpBaseAST
 {
 public:
-    std::unique_ptr<BaseAST> lor_exp;
+    std::unique_ptr<ExpBaseAST> lor_exp;
 
     void Dump() const override
     {
@@ -500,7 +475,7 @@ public:
 /**
  * @brief LOrExp      ::= LAndExp | LOrExp "||" LAndExp;
  */
-class LOrExpAST : public BaseAST
+class LOrExpAST : public ExpBaseAST
 {
 public:
     enum class Tag
@@ -508,8 +483,8 @@ public:
         LAND,
         LOR
     } tag;
-    std::unique_ptr<BaseAST> land_exp;
-    std::unique_ptr<BaseAST> lor_exp;
+    std::unique_ptr<ExpBaseAST> land_exp;
+    std::unique_ptr<ExpBaseAST> lor_exp;
 
     LOrExpAST(Tag tag) : tag(tag) {}
 
@@ -537,7 +512,6 @@ public:
             }
             else
             {
-                // TODO 注意这里虽然可能有一方的symbol是数字，但是输出了Koopa IR符号
                 std::string lor_sym = "%" + std::to_string(sym_cnt++);
                 std::string land_sym = "%" + std::to_string(sym_cnt++);
                 symbol = "%" + std::to_string(sym_cnt++);
@@ -555,7 +529,7 @@ public:
 /**
  * @brief LAndExp     ::= EqExp | LAndExp "&&" EqExp;
  */
-class LAndExpAST : public BaseAST
+class LAndExpAST : public ExpBaseAST
 {
 public:
     enum Tag
@@ -563,8 +537,8 @@ public:
         EQ,
         LAND
     } tag;
-    std::unique_ptr<BaseAST> eq_exp;
-    std::unique_ptr<BaseAST> land_exp;
+    std::unique_ptr<ExpBaseAST> eq_exp;
+    std::unique_ptr<ExpBaseAST> land_exp;
 
     LAndExpAST(Tag tag) : tag(tag) {}
 
@@ -610,7 +584,7 @@ public:
 /**
  * @brief EqExp       ::= RelExp | EqExp ("==" | "!=") RelExp;
  */
-class EqExpAST : public BaseAST
+class EqExpAST : public ExpBaseAST
 {
 public:
     enum class Tag
@@ -621,8 +595,8 @@ public:
     inline static const std::unordered_map<std::string, std::string> op_ir{
         {"==", "eq"},
         {"!=", "ne"}};
-    std::unique_ptr<BaseAST> rel_exp;
-    std::unique_ptr<BaseAST> eq_exp;
+    std::unique_ptr<ExpBaseAST> rel_exp;
+    std::unique_ptr<ExpBaseAST> eq_exp;
     std::string op;
     EqExpAST(Tag tag) : tag(tag) {}
 
@@ -668,7 +642,7 @@ public:
 /**
  * @brief RelExp      ::= AddExp | RelExp ("<" | ">" | "<=" | ">=") AddExp;
  */
-class RelExpAST : public BaseAST
+class RelExpAST : public ExpBaseAST
 {
 public:
     enum class Tag
@@ -681,8 +655,8 @@ public:
         {">", "gt"},
         {"<=", "le"},
         {">=", "ge"}};
-    std::unique_ptr<BaseAST> add_exp;
-    std::unique_ptr<BaseAST> rel_exp;
+    std::unique_ptr<ExpBaseAST> add_exp;
+    std::unique_ptr<ExpBaseAST> rel_exp;
     std::string op;
 
     RelExpAST(Tag tag) : tag(tag) {}
@@ -737,7 +711,7 @@ public:
 /**
  * @brief AddExp      ::= MulExp | AddExp ("+" | "-") MulExp;
  */
-class AddExpAST : public BaseAST
+class AddExpAST : public ExpBaseAST
 {
 public:
     enum class Tag
@@ -748,8 +722,8 @@ public:
     inline static const std::unordered_map<std::string, std::string> op_ir{
         {"+", "add"},
         {"-", "sub"}};
-    std::unique_ptr<BaseAST> mul_exp;
-    std::unique_ptr<BaseAST> add_exp;
+    std::unique_ptr<ExpBaseAST> mul_exp;
+    std::unique_ptr<ExpBaseAST> add_exp;
     std::string op;
 
     AddExpAST(Tag tag) : tag(tag) {}
@@ -797,7 +771,7 @@ public:
 /**
  * @brief MulExp      ::= UnaryExp | MulExp ("*" | "/" | "%") UnaryExp;
  */
-class MulExpAST : public BaseAST
+class MulExpAST : public ExpBaseAST
 {
 public:
     enum class Tag
@@ -809,8 +783,8 @@ public:
         {"*", "mul"},
         {"/", "div"},
         {"%", "mod"}};
-    std::unique_ptr<BaseAST> unary_exp;
-    std::unique_ptr<BaseAST> mul_exp;
+    std::unique_ptr<ExpBaseAST> unary_exp;
+    std::unique_ptr<ExpBaseAST> mul_exp;
     std::string op;
 
     MulExpAST(Tag tag) : tag(tag) {}
@@ -863,7 +837,7 @@ public:
 /**
  * @brief UnaryExp    ::= PrimaryExp | UnaryOp UnaryExp;
  */
-class UnaryExpAST : public BaseAST
+class UnaryExpAST : public ExpBaseAST
 {
 public:
     enum class Tag
@@ -874,9 +848,9 @@ public:
     inline static const std::unordered_map<std::string, std::string> op_ir{
         {"-", "sub"},
         {"!", "eq"}};
-    std::unique_ptr<BaseAST> primary_exp;
+    std::unique_ptr<ExpBaseAST> primary_exp;
     std::string unary_op;
-    std::unique_ptr<BaseAST> unary_exp;
+    std::unique_ptr<ExpBaseAST> unary_exp;
 
     UnaryExpAST(Tag tag) : tag(tag) {}
 
@@ -943,7 +917,7 @@ public:
 /**
  * @brief PrimaryExp    ::= "(" Exp ")" | LVal | Number;
  */
-class PrimaryExpAST : public BaseAST
+class PrimaryExpAST : public ExpBaseAST
 {
 public:
     enum class Tag
@@ -952,7 +926,7 @@ public:
         LVAL,
         NUMBER
     } tag;
-    std::unique_ptr<BaseAST> exp;
+    std::unique_ptr<ExpBaseAST> exp;
     std::unique_ptr<LValAST> lval;
     int number;
 
