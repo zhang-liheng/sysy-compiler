@@ -18,6 +18,9 @@
 #define dbg_printf(...)
 #endif
 
+// TODO 总限时一周，搞完
+// TODO 考虑把std::string symbol改成std::variant<int, std::string> symbol
+
 /**
  * 目前采用如下策略：
  * 1. 在变量分类上，is_const只对常量成立
@@ -32,7 +35,7 @@ static int sym_cnt = 0;
 static SymbolTable sym_tab;
 
 /**
- * @brief 按照官方文档的写法，所有成员变量均为public，不提供get方法
+ * @brief 按照官方文档的写法，所有成员变量均为public，不提供get和set方法
  */
 class BaseAST
 {
@@ -102,6 +105,135 @@ public:
 };
 
 /**
+ * @brief Stmt ::= LVal "=" Exp ";"
+ *              | [Exp] ";"
+ *              | Block
+ *              | "if" "(" Exp ")" Stmt ["else" Stmt]
+ *              | "return" [Exp] ";";
+ */
+class StmtAST : public BaseAST
+{
+public:
+    // TODO 两种设计（初始化和生成IR）方法
+    // 现在的规定是，只有stmt中的ret可以以控制转移语句结尾，其它要么以跳转目标结尾，要么以普通koopa ir语句结尾
+    inline static bool has_ret = false;
+    enum class Tag
+    {
+        LVAL,
+        EXP,
+        BLOCK,
+        IF,
+        RETURN
+    } tag;
+    std::unique_ptr<LValAST> lval;
+    std::unique_ptr<ExpBaseAST> exp;
+    std::unique_ptr<BaseAST> block;
+    std::unique_ptr<BaseAST> if_stmt;
+    std::unique_ptr<BaseAST> else_stmt;
+
+    void Dump() const override
+    {
+        std::cout << "StmtAST { ";
+        exp->Dump();
+        std::cout << " }";
+    }
+
+    void IR() override
+    {
+        dbg_printf("in StmtAST\n");
+        if (has_ret)
+        {
+            return;
+        }
+
+        switch (tag)
+        {
+        case Tag::LVAL:
+        {
+            lval->IR();
+            exp->IR();
+            auto sym_info = sym_tab[lval->ident];
+            assert(sym_info->tag == SymbolTag::VAR);
+            std::cout << "  store " << exp->symbol << ", " << sym_info->symbol << std::endl;
+            break;
+        }
+
+        case Tag::EXP:
+        {
+            if (exp)
+            {
+                exp->IR();
+            }
+            break;
+        }
+
+        case Tag::BLOCK:
+        {
+            block->IR();
+            break;
+        }
+
+        case Tag::IF:
+        {
+            exp->IR(); // TODO 常数exp条件语句的消除
+            auto cur_sym_cnt = sym_cnt++;
+            if (else_stmt)
+            {
+                std::cout << "  br " << exp->symbol << ", %then_" << cur_sym_cnt
+                          << ", %else_" << cur_sym_cnt << std::endl;
+            }
+            else
+            {
+                std::cout << "  br " << exp->symbol << ", %then_" << cur_sym_cnt
+                          << ", %end_" << cur_sym_cnt << std::endl;
+            }
+            std::cout << std::endl;
+            std::cout << "%then_" << cur_sym_cnt << ":" << std::endl;
+            has_ret = false;
+            if_stmt->IR();
+            if (!has_ret)
+            {
+                std::cout << "  jump %end_" << cur_sym_cnt << std::endl;
+                std::cout << std::endl;
+            }
+            if (else_stmt)
+            {
+                std::cout << "%else_" << cur_sym_cnt << ":" << std::endl;
+                has_ret = false;
+                else_stmt->IR();
+                if (!has_ret)
+                {
+                    std::cout << "  jump %end_" << cur_sym_cnt << std::endl;
+                    std::cout << std::endl;
+                }
+            }
+            std::cout << "%end_" << cur_sym_cnt << ":" << std::endl;
+            has_ret = false;
+            break;
+        }
+
+        case Tag::RETURN:
+        {
+            if (exp)
+            {
+                exp->IR();
+                std::cout << "  ret " << exp->symbol << std::endl;
+            }
+            else
+            {
+                std::cout << "  ret" << std::endl; // TODO int函数要补成return 0
+            }
+            has_ret = true;
+            break;
+        }
+
+        default:
+            assert(false);
+        }
+    }
+};
+
+/**
  * @brief FuncDef   ::= FuncType IDENT "(" ")" Block;
  */
 class FuncDefAST : public BaseAST
@@ -128,6 +260,7 @@ public:
         func_type->IR();
         std::cout << " {" << std::endl;
         std::cout << "%entry:" << std::endl; // TODO 权宜之计
+        StmtAST::has_ret = false;
         block->IR();
         std::cout << "}" << std::endl;
     }
@@ -236,6 +369,10 @@ public:
 
     void IR() override
     {
+        if (StmtAST::has_ret)
+        {
+            return;
+        }
         if (tag == Tag::CONST)
         {
             const_decl->IR();
@@ -302,7 +439,8 @@ public:
 
     void IR() override
     {
-        auto symbol = "@" + ident + "_" + std::to_string(sym_tab.count(ident) + 1);
+        // TODO 不能用count
+        auto symbol = "@" + ident + "_" + std::to_string(sym_cnt++);
         sym_tab.insert(ident, SymbolTag::VAR, symbol);
         std::cout << "  " << symbol << " = alloc i32" << std::endl;
         if (init_val)
@@ -386,70 +524,6 @@ public:
 };
 
 /**
- * @brief Stmt ::= LVal "=" Exp ";"
- *              | [Exp] ";"
- *              | Block
- *              | "return" [Exp] ";";
- */
-class StmtAST : public BaseAST
-{
-public:
-    enum class Tag
-    {
-        LVAL,
-        EXP,
-        BLOCK,
-        RETURN
-    } tag;
-    std::unique_ptr<LValAST> lval;
-    std::unique_ptr<ExpBaseAST> exp;
-    std::unique_ptr<BaseAST> block;
-
-    void Dump() const override
-    {
-        std::cout << "StmtAST { ";
-        exp->Dump();
-        std::cout << " }";
-    }
-
-    void IR() override
-    {
-        dbg_printf("in StmtAST\n");
-        if (tag == Tag::BLOCK)
-        {
-            block->IR();
-        }
-        else if (tag == Tag::EXP)
-        {
-            if (exp)
-            {
-                exp->IR();
-            }
-        }
-        else if (tag == Tag::LVAL)
-        {
-            lval->IR();
-            exp->IR();
-            auto sym_info = sym_tab[lval->ident];
-            assert(sym_info->tag == SymbolTag::VAR);
-            std::cout << "  store " << exp->symbol << ", " << sym_info->symbol << std::endl;
-        }
-        else
-        {
-            if (exp)
-            {
-                exp->IR();
-                std::cout << "  ret " << exp->symbol << std::endl;
-            }
-            else
-            {
-                std::cout << "  ret" << std::endl;
-            }
-        }
-    }
-};
-
-/**
  * @brief Exp         ::= LOrExp;
  */
 class ExpAST : public ExpBaseAST
@@ -474,6 +548,8 @@ public:
 
 /**
  * @brief LOrExp      ::= LAndExp | LOrExp "||" LAndExp;
+ *
+ * @todo 分支语句加速
  */
 class LOrExpAST : public ExpBaseAST
 {
@@ -501,26 +577,64 @@ public:
         }
         else
         {
-            land_exp->IR();
+            /**
+             * 本质上做了这个操作:
+             * int result = 1;
+             * if (lhs == 0)
+             * {
+             *      result = rhs != 0;
+             * }
+             * 表达式的结果即是 result
+             */
             lor_exp->IR();
-            is_const = land_exp->is_const && lor_exp->is_const;
-            if (is_const)
+            if (lor_exp->is_const)
             {
                 bool lor_true = atoi(lor_exp->symbol.c_str());
-                bool land_true = atoi(land_exp->symbol.c_str());
-                symbol = std::to_string(lor_true || land_true);
+                if (lor_true)
+                {
+                    is_const = true;
+                    symbol = "1";
+                }
+                else
+                {
+                    land_exp->IR();
+                    is_const = land_exp->is_const;
+                    if (is_const)
+                    {
+                        bool land_true = atoi(land_exp->symbol.c_str());
+                        symbol = std::to_string(land_true);
+                    }
+                    else
+                    {
+                        symbol = "%" + std::to_string(sym_cnt++);
+                        std::cout << "  " << symbol << " = ne "
+                                  << land_exp->symbol << ", 0" << std::endl;
+                    }
+                }
             }
             else
             {
-                std::string lor_sym = "%" + std::to_string(sym_cnt++);
-                std::string land_sym = "%" + std::to_string(sym_cnt++);
+                // TODO 考虑变量koopa ir是否可能重名，还有各种ir
+                is_const = false;
+                auto cur_sym_cnt = sym_cnt++;
+                auto res_sym = "%lor_res_" + std::to_string(sym_cnt++);
+                sym_tab.insert(res_sym, SymbolTag::VAR, res_sym);
+                std::cout << "  " << res_sym << " = alloc i32" << std::endl;
+                std::cout << "  store 1, " << res_sym << std::endl;
+                std::cout << "  br " << lor_exp->symbol
+                          << ", %lor_end_" << cur_sym_cnt
+                          << ", %left_false_" << cur_sym_cnt << std::endl;
+                std::cout << std::endl;
+                std::cout << "%left_false_" << cur_sym_cnt << ":" << std::endl;
+                land_exp->IR();
+                std::cout << "  store " << land_exp->symbol
+                          << ", " << res_sym << std::endl;
+                std::cout << "  jump %lor_end_" << cur_sym_cnt << std::endl;
+                std::cout << std::endl;
+                std::cout << "%lor_end_" << cur_sym_cnt << ":" << std::endl;
                 symbol = "%" + std::to_string(sym_cnt++);
-                std::cout << "  " << lor_sym << " = ne " << lor_exp->symbol
-                          << ", 0" << std::endl;
-                std::cout << "  " << land_sym << " = ne " << land_exp->symbol
-                          << ", 0" << std::endl;
-                std::cout << "  " << symbol << " = or " << lor_sym
-                          << ", " << land_sym << std::endl;
+                std::cout << "  " << symbol << " = load "
+                          << res_sym << std::endl;
             }
         }
     }
@@ -555,27 +669,64 @@ public:
         }
         else
         {
-            eq_exp->IR();
+            /**
+             * 本质上做了这个操作:
+             * int result = 0;
+             * if (lhs == 1)
+             * {
+             *      result = rhs != 0;
+             * }
+             * 表达式的结果即是 result
+             */
             land_exp->IR();
-            is_const = eq_exp->is_const && land_exp->is_const;
-            if (is_const)
+            if (land_exp->is_const)
             {
                 bool land_true = atoi(land_exp->symbol.c_str());
-                bool eq_true = atoi(eq_exp->symbol.c_str());
-                symbol = std::to_string(land_true && eq_true);
+                if (!land_true)
+                {
+                    is_const = true;
+                    symbol = "0";
+                }
+                else
+                {
+                    eq_exp->IR();
+                    is_const = eq_exp->is_const;
+                    if (is_const)
+                    {
+                        bool eq_true = atoi(eq_exp->symbol.c_str());
+                        symbol = std::to_string(eq_true);
+                    }
+                    else
+                    {
+                        symbol = "%" + std::to_string(sym_cnt++);
+                        std::cout << "  " << symbol << " = ne "
+                                  << eq_exp->symbol << ", 0" << std::endl;
+                    }
+                }
             }
             else
             {
-                // TODO 注意这里
-                std::string land_sym = "%" + std::to_string(sym_cnt++);
-                std::string eq_sym = "%" + std::to_string(sym_cnt++);
+                // TODO 考虑变量koopa ir是否可能重名，还有各种ir
+                is_const = false;
+                auto cur_sym_cnt = sym_cnt++;
+                auto res_sym = "%land_res_" + std::to_string(sym_cnt++);
+                sym_tab.insert(res_sym, SymbolTag::VAR, res_sym);
+                std::cout << "  " << res_sym << " = alloc i32" << std::endl;
+                std::cout << "  store 0, " << res_sym << std::endl;
+                std::cout << "  br " << land_exp->symbol
+                          << ", %left_true_" << cur_sym_cnt
+                          << ", %land_end_" << cur_sym_cnt << std::endl;
+                std::cout << std::endl;
+                std::cout << "%left_true_" << cur_sym_cnt << ":" << std::endl;
+                eq_exp->IR();
+                std::cout << "  store " << eq_exp->symbol
+                          << ", " << res_sym << std::endl;
+                std::cout << "  jump %land_end_" << cur_sym_cnt << std::endl;
+                std::cout << std::endl;
+                std::cout << "%land_end_" << cur_sym_cnt << ":" << std::endl;
                 symbol = "%" + std::to_string(sym_cnt++);
-                std::cout << "  " << land_sym << " = ne " << land_exp->symbol
-                          << ", 0" << std::endl;
-                std::cout << "  " << eq_sym << " = ne " << eq_exp->symbol
-                          << ", 0" << std::endl;
-                std::cout << "  " << symbol << " = and " << land_sym
-                          << ", " << eq_sym << std::endl;
+                std::cout << "  " << symbol << " = load "
+                          << res_sym << std::endl;
             }
         }
     }

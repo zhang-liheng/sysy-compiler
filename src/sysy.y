@@ -48,7 +48,7 @@ using namespace std;
 
 // lexer 返回的所有 token 种类的声明
 // 注意 IDENT 和 INT_CONST 会返回 token 的值, 分别对应 str_val 和 int_val
-%token INT RETURN LT GT LE GE EQ NE LAND LOR CONST
+%token INT RETURN LT GT LE GE EQ NE LAND LOR CONST IF ELSE
 %token <str_val> IDENT
 %token <int_val> INT_CONST
 
@@ -59,6 +59,10 @@ Decl ConstDecl ConstDef ConstDefList LVal VarDecl VarDef VarDefList
 RelExp ConstInitVal ConstExp InitVal
 %type <int_val> Number
 %type <str_val> UnaryOp
+
+//规定if-else匹配优先级，以解决空悬else问题
+%precedence IFX
+%precedence ELSE
 
 %%
 
@@ -314,6 +318,23 @@ Stmt
     auto ast = new StmtAST();
     ast->tag = StmtAST::Tag::BLOCK;
     ast->block = unique_ptr<BaseAST>($1);
+    $$ = ast;
+  }
+  | IF '(' Exp ')' Stmt %prec IFX {
+    dbg_printf("in Stmt\n");
+    auto ast = new StmtAST();
+    ast->tag = StmtAST::Tag::IF;
+    ast->exp = unique_ptr<ExpBaseAST>($3);
+    ast->if_stmt = unique_ptr<BaseAST>($5);
+    $$ = ast;
+  }
+  | IF '(' Exp ')' Stmt ELSE Stmt {
+    dbg_printf("in Stmt\n");
+    auto ast = new StmtAST();
+    ast->tag = StmtAST::Tag::IF;
+    ast->exp = unique_ptr<ExpBaseAST>($3);
+    ast->if_stmt = unique_ptr<BaseAST>($5);
+    ast->else_stmt = unique_ptr<BaseAST>($7);
     $$ = ast;
   }
   | RETURN Exp ';' {
