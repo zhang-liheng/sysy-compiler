@@ -2,7 +2,7 @@
   #include <memory>
   #include <string>
 
-  #include "include/ast.h"
+  #include "include/ast.hpp"
 }
 
 %{
@@ -12,7 +12,7 @@
 #include <string>
 #include <utility>
 
-#include "include/ast.h"
+#include "include/ast.hpp"
 
 // #define DEBUG
 #ifdef DEBUG
@@ -53,10 +53,10 @@ using namespace std;
 %token <int_val> INT_CONST
 
 // 非终结符的类型定义
-%type <ast_val> CompUnit FuncDef FuncType Block Stmt BlockItem BlockItemList
-Decl ConstDecl ConstDef ConstDefList LVal VarDecl VarDef VarDefList
-%type <exp_val> Exp UnaryExp PrimaryExp AddExp MulExp LOrExp LAndExp EqExp
-RelExp ConstInitVal ConstExp InitVal
+%type <ast_val> CompUnit Decl ConstDecl ConstDef ConstDefList VarDecl VarDef 
+VarDefList FuncDef FuncType Block BlockItem BlockItemList Stmt LVal 
+%type <exp_val> ConstInitVal InitVal Exp PrimaryExp UnaryExp MulExp AddExp 
+RelExp EqExp LAndExp LOrExp ConstExp 
 %type <int_val> Number
 %type <str_val> UnaryOp
 
@@ -77,82 +77,6 @@ CompUnit
     auto comp_unit = make_unique<CompUnitAST>();
     comp_unit->func_def = unique_ptr<BaseAST>($1);
     ast = move(comp_unit);
-  }
-  ;
-
-// FuncDef ::= FuncType IDENT '(' ')' Block;
-// 我们这里可以直接写 '(' 和 ')', 因为之前在 lexer 里已经处理了单个字符的情况
-// 解析完成后, 把这些符号的结果收集起来, 然后拼成一个新的字符串, 作为结果返回
-// $$ 表示非终结符的返回值, 我们可以通过给这个符号赋值的方法来返回结果
-// 你可能会问, FuncType, IDENT 之类的结果已经是字符串指针了
-// 为什么还要用 unique_ptr 接住它们, 然后再解引用, 把它们拼成另一个字符串指针呢
-// 因为所有的字符串指针都是我们 new 出来的, new 出来的内存一定要 delete
-// 否则会发生内存泄漏, 而 unique_ptr 这种智能指针可以自动帮我们 delete
-// 虽然此处你看不出用 unique_ptr 和手动 delete 的区别, 但当我们定义了 AST 之后
-// 这种写法会省下很多内存管理的负担
-FuncDef
-  : FuncType IDENT '(' ')' Block {
-    dbg_printf("in FuncDef\n");
-
-    auto ast = new FuncDefAST();
-    ast->func_type = unique_ptr<BaseAST>($1);
-    ast->ident = *unique_ptr<string>($2);
-    ast->block = unique_ptr<BaseAST>($5);
-    $$ = ast;
-  }
-  ;
-
-// 同上, 不再解释
-FuncType
-  : INT {
-    dbg_printf("in FuncType\n");
-
-    auto ast = new FuncTypeAST();
-    ast->type = "int";
-    $$ = ast;
-  }
-  ;
-
-Block
-  : '{' BlockItemList '}' {
-    dbg_printf("in Block\n");
-    $$ = $2;
-  }
-  ;
-
-BlockItemList
-  : { 
-    dbg_printf("in BlockItemList 1\n");
-    $$ = new BlockAST(); 
-  }
-  | BlockItem BlockItemList {
-    dbg_printf("in BlockItemList 2\n");
-    auto ast = new BlockAST();
-    auto block_item = unique_ptr<BaseAST>($1);
-    auto block_item_list = unique_ptr<BlockAST>((BlockAST*)($2));
-    ast->block_items.emplace_back(std::move(block_item));
-    for(auto &item : block_item_list->block_items)
-    {
-      ast->block_items.emplace_back(std::move(item));
-    }
-    $$ = ast;
-  }
-  ;
-
-BlockItem
-  : Stmt {
-    dbg_printf("in BlockItem\n");
-    auto ast = new BlockItemAST();
-    ast->tag = BlockItemAST::Tag::STMT;
-    ast->stmt = unique_ptr<BaseAST>($1);
-    $$ = ast;
-  }
-  | Decl {
-    dbg_printf("in BlockItem\n");
-    auto ast = new BlockItemAST();
-    ast->tag = BlockItemAST::Tag::DECL;
-    ast->decl = unique_ptr<BaseAST>($1);
-    $$ = ast;
   }
   ;
 
@@ -282,11 +206,78 @@ InitVal
   }
   ;
 
-ConstExp
-  : Exp {
-    dbg_printf("in ConstExp\n");
-    auto ast = new ConstExpAST();
-    ast->exp = unique_ptr<ExpBaseAST>($1);
+// FuncDef ::= FuncType IDENT '(' ')' Block;
+// 我们这里可以直接写 '(' 和 ')', 因为之前在 lexer 里已经处理了单个字符的情况
+// 解析完成后, 把这些符号的结果收集起来, 然后拼成一个新的字符串, 作为结果返回
+// $$ 表示非终结符的返回值, 我们可以通过给这个符号赋值的方法来返回结果
+// 你可能会问, FuncType, IDENT 之类的结果已经是字符串指针了
+// 为什么还要用 unique_ptr 接住它们, 然后再解引用, 把它们拼成另一个字符串指针呢
+// 因为所有的字符串指针都是我们 new 出来的, new 出来的内存一定要 delete
+// 否则会发生内存泄漏, 而 unique_ptr 这种智能指针可以自动帮我们 delete
+// 虽然此处你看不出用 unique_ptr 和手动 delete 的区别, 但当我们定义了 AST 之后
+// 这种写法会省下很多内存管理的负担
+FuncDef
+  : FuncType IDENT '(' ')' Block {
+    dbg_printf("in FuncDef\n");
+
+    auto ast = new FuncDefAST();
+    ast->func_type = unique_ptr<BaseAST>($1);
+    ast->ident = *unique_ptr<string>($2);
+    ast->block = unique_ptr<BaseAST>($5);
+    $$ = ast;
+  }
+  ;
+
+// 同上, 不再解释
+FuncType
+  : INT {
+    dbg_printf("in FuncType\n");
+
+    auto ast = new FuncTypeAST();
+    ast->type = "int";
+    $$ = ast;
+  }
+  ;
+
+Block
+  : '{' BlockItemList '}' {
+    dbg_printf("in Block\n");
+    $$ = $2;
+  }
+  ;
+
+BlockItemList
+  : { 
+    dbg_printf("in BlockItemList 1\n");
+    $$ = new BlockAST(); 
+  }
+  | BlockItem BlockItemList {
+    dbg_printf("in BlockItemList 2\n");
+    auto ast = new BlockAST();
+    auto block_item = unique_ptr<BaseAST>($1);
+    auto block_item_list = unique_ptr<BlockAST>((BlockAST*)($2));
+    ast->block_items.emplace_back(std::move(block_item));
+    for(auto &item : block_item_list->block_items)
+    {
+      ast->block_items.emplace_back(std::move(item));
+    }
+    $$ = ast;
+  }
+  ;
+
+BlockItem
+  : Stmt {
+    dbg_printf("in BlockItem\n");
+    auto ast = new BlockItemAST();
+    ast->tag = BlockItemAST::Tag::STMT;
+    ast->stmt = unique_ptr<BaseAST>($1);
+    $$ = ast;
+  }
+  | Decl {
+    dbg_printf("in BlockItem\n");
+    auto ast = new BlockItemAST();
+    ast->tag = BlockItemAST::Tag::DECL;
+    ast->decl = unique_ptr<BaseAST>($1);
     $$ = ast;
   }
   ;
@@ -382,59 +373,134 @@ Exp
   }
   ;
 
-LOrExp
-  : LAndExp {
-    dbg_printf("in LOrExp\n");
-    auto ast = new LOrExpAST(LOrExpAST::Tag::LAND);
-    ast->land_exp = unique_ptr<ExpBaseAST>($1);
-    $$ = ast;
-  }
-  | LOrExp LOR LAndExp {
-    dbg_printf("in LOrExp\n");
-    auto ast = new LOrExpAST(LOrExpAST::Tag::LOR);
-    ast->lor_exp = unique_ptr<ExpBaseAST>($1);
-    ast->land_exp = unique_ptr<ExpBaseAST>($3);
+LVal
+  : IDENT {
+    dbg_printf("in LVal\n");
+
+    auto ast = new LValAST();
+    ast->ident = *unique_ptr<string>($1);
     $$ = ast;
   }
   ;
 
-LAndExp
-  : EqExp {
-    dbg_printf("in LAndExp\n");
-    auto ast = new LAndExpAST(LAndExpAST::Tag::EQ);
-    ast->eq_exp = unique_ptr<ExpBaseAST>($1);
+PrimaryExp
+  : '(' Exp ')' {
+    dbg_printf("in PrimaryExp\n");
+
+    auto ast = new PrimaryExpAST(PrimaryExpAST::Tag::EXP);
+    ast->exp = unique_ptr<ExpBaseAST>($2);
     $$ = ast;
   }
-  | LAndExp LAND EqExp {
-    dbg_printf("in LAndExp\n");
-    auto ast = new LAndExpAST(LAndExpAST::Tag::LAND);
-    ast->land_exp = unique_ptr<ExpBaseAST>($1);
-    ast->eq_exp = unique_ptr<ExpBaseAST>($3);
+  | LVal {
+    dbg_printf("in PrimaryExp\n");
+
+    auto ast = new PrimaryExpAST(PrimaryExpAST::Tag::LVAL);
+    ast->lval = unique_ptr<LValAST>((LValAST*)($1));
+    $$ = ast;
+  }
+  | Number {
+    dbg_printf("in PrimaryExp\n");
+
+    auto ast = new PrimaryExpAST(PrimaryExpAST::Tag::NUMBER);
+    ast->number = $1;
     $$ = ast;
   }
   ;
 
-EqExp
-  : RelExp {
-    dbg_printf("in EqExp\n");
-    auto ast = new EqExpAST(EqExpAST::Tag::REL);
-    ast->rel_exp = unique_ptr<ExpBaseAST>($1);
+Number
+  : INT_CONST {
+    $$ = $1;
+  }
+  ;
+
+UnaryExp
+  : PrimaryExp {
+    dbg_printf("in UnaryExp\n");
+
+    auto ast = new UnaryExpAST(UnaryExpAST::Tag::PRIMARY);
+    ast->primary_exp = unique_ptr<ExpBaseAST>($1);
     $$ = ast;
   }
-  | EqExp EQ RelExp {
-    dbg_printf("in EqExp\n");
-    auto ast = new EqExpAST(EqExpAST::Tag::EQ);
-    ast->eq_exp = unique_ptr<ExpBaseAST>($1);
-    ast->op = "==";
-    ast->rel_exp = unique_ptr<ExpBaseAST>($3);
+  | UnaryOp UnaryExp {
+    dbg_printf("in UnaryExp\n");
+
+    auto ast = new UnaryExpAST(UnaryExpAST::Tag::OP);
+    ast->unary_op = *unique_ptr<string>($1);
+    ast->unary_exp = unique_ptr<ExpBaseAST>($2);
     $$ = ast;
   }
-  | EqExp NE RelExp {
-    dbg_printf("in EqExp\n");
-    auto ast = new EqExpAST(EqExpAST::Tag::EQ);
-    ast->eq_exp = unique_ptr<ExpBaseAST>($1);
-    ast->op = "!=";
-    ast->rel_exp = unique_ptr<ExpBaseAST>($3);
+  ;
+
+UnaryOp
+  : '+' { 
+    auto op = new string("+");
+    $$ = op;
+  }
+  | '-' {
+    auto op = new string("-");
+    $$ = op;
+  }
+  | '!' { 
+    auto op = new string("!");
+    $$ = op;
+  }
+  ;
+
+MulExp
+  : UnaryExp {
+    dbg_printf("in MulExp\n");
+    auto ast = new MulExpAST(MulExpAST::Tag::UNARY);
+    ast->unary_exp = unique_ptr<ExpBaseAST>($1);
+    $$ = ast;
+  }
+  | MulExp '*' UnaryExp {
+    dbg_printf("in MulExp\n");
+    auto ast = new MulExpAST(MulExpAST::Tag::MUL);
+    ast->mul_exp = unique_ptr<ExpBaseAST>($1);
+    ast->op = "*";
+    ast->unary_exp = unique_ptr<ExpBaseAST>($3);
+    $$ = ast;
+  }
+  | MulExp '/' UnaryExp {
+    dbg_printf("in MulExp\n");
+    auto ast = new MulExpAST(MulExpAST::Tag::MUL);
+    ast->mul_exp = unique_ptr<ExpBaseAST>($1);
+    ast->op = "/";
+    ast->unary_exp = unique_ptr<ExpBaseAST>($3);
+    $$ = ast;
+  }
+  | MulExp '%' UnaryExp {
+    dbg_printf("in MulExp\n");
+    auto ast = new MulExpAST(MulExpAST::Tag::MUL);
+    ast->mul_exp = unique_ptr<ExpBaseAST>($1);
+    ast->op = "%";
+    ast->unary_exp = unique_ptr<ExpBaseAST>($3);
+    $$ = ast;
+  }
+  ;
+
+AddExp
+  : MulExp {
+    dbg_printf("in AddExp\n");
+
+    auto ast = new AddExpAST(AddExpAST::Tag::MUL);
+    ast->mul_exp = unique_ptr<ExpBaseAST>($1);
+    $$ = ast;
+  }
+  | AddExp '+' MulExp {
+    dbg_printf("in AddExp\n");
+    auto ast = new AddExpAST(AddExpAST::Tag::ADD);
+    ast->add_exp = unique_ptr<ExpBaseAST>($1);
+    ast->op = "+";
+    ast->mul_exp = unique_ptr<ExpBaseAST>($3);
+    $$ = ast;
+  }
+  | AddExp '-' MulExp {
+    dbg_printf("in AddExp\n");
+    auto ast = new AddExpAST(AddExpAST::Tag::ADD);
+    ast->add_exp = unique_ptr<ExpBaseAST>($1);
+    ast->op = "-";
+    ast->mul_exp = unique_ptr<ExpBaseAST>($3);
     $$ = ast;
   }
   ;
@@ -480,136 +546,69 @@ RelExp
   }
   ;
 
-AddExp
-  : MulExp {
-    dbg_printf("in AddExp\n");
-
-    auto ast = new AddExpAST(AddExpAST::Tag::MUL);
-    ast->mul_exp = unique_ptr<ExpBaseAST>($1);
+EqExp
+  : RelExp {
+    dbg_printf("in EqExp\n");
+    auto ast = new EqExpAST(EqExpAST::Tag::REL);
+    ast->rel_exp = unique_ptr<ExpBaseAST>($1);
     $$ = ast;
   }
-  | AddExp '+' MulExp {
-    dbg_printf("in AddExp\n");
-    auto ast = new AddExpAST(AddExpAST::Tag::ADD);
-    ast->add_exp = unique_ptr<ExpBaseAST>($1);
-    ast->op = "+";
-    ast->mul_exp = unique_ptr<ExpBaseAST>($3);
+  | EqExp EQ RelExp {
+    dbg_printf("in EqExp\n");
+    auto ast = new EqExpAST(EqExpAST::Tag::EQ);
+    ast->eq_exp = unique_ptr<ExpBaseAST>($1);
+    ast->op = "==";
+    ast->rel_exp = unique_ptr<ExpBaseAST>($3);
     $$ = ast;
   }
-  | AddExp '-' MulExp {
-    dbg_printf("in AddExp\n");
-    auto ast = new AddExpAST(AddExpAST::Tag::ADD);
-    ast->add_exp = unique_ptr<ExpBaseAST>($1);
-    ast->op = "-";
-    ast->mul_exp = unique_ptr<ExpBaseAST>($3);
-    $$ = ast;
-  }
-  ;
-
-MulExp
-  : UnaryExp {
-    dbg_printf("in MulExp\n");
-    auto ast = new MulExpAST(MulExpAST::Tag::UNARY);
-    ast->unary_exp = unique_ptr<ExpBaseAST>($1);
-    $$ = ast;
-  }
-  | MulExp '*' UnaryExp {
-    dbg_printf("in MulExp\n");
-    auto ast = new MulExpAST(MulExpAST::Tag::MUL);
-    ast->mul_exp = unique_ptr<ExpBaseAST>($1);
-    ast->op = "*";
-    ast->unary_exp = unique_ptr<ExpBaseAST>($3);
-    $$ = ast;
-  }
-  | MulExp '/' UnaryExp {
-    dbg_printf("in MulExp\n");
-    auto ast = new MulExpAST(MulExpAST::Tag::MUL);
-    ast->mul_exp = unique_ptr<ExpBaseAST>($1);
-    ast->op = "/";
-    ast->unary_exp = unique_ptr<ExpBaseAST>($3);
-    $$ = ast;
-  }
-  | MulExp '%' UnaryExp {
-    dbg_printf("in MulExp\n");
-    auto ast = new MulExpAST(MulExpAST::Tag::MUL);
-    ast->mul_exp = unique_ptr<ExpBaseAST>($1);
-    ast->op = "%";
-    ast->unary_exp = unique_ptr<ExpBaseAST>($3);
+  | EqExp NE RelExp {
+    dbg_printf("in EqExp\n");
+    auto ast = new EqExpAST(EqExpAST::Tag::EQ);
+    ast->eq_exp = unique_ptr<ExpBaseAST>($1);
+    ast->op = "!=";
+    ast->rel_exp = unique_ptr<ExpBaseAST>($3);
     $$ = ast;
   }
   ;
 
-UnaryExp
-  : PrimaryExp {
-    dbg_printf("in UnaryExp\n");
-
-    auto ast = new UnaryExpAST(UnaryExpAST::Tag::PRIMARY);
-    ast->primary_exp = unique_ptr<ExpBaseAST>($1);
+LAndExp
+  : EqExp {
+    dbg_printf("in LAndExp\n");
+    auto ast = new LAndExpAST(LAndExpAST::Tag::EQ);
+    ast->eq_exp = unique_ptr<ExpBaseAST>($1);
     $$ = ast;
   }
-  | UnaryOp UnaryExp {
-    dbg_printf("in UnaryExp\n");
-
-    auto ast = new UnaryExpAST(UnaryExpAST::Tag::OP);
-    ast->unary_op = *unique_ptr<string>($1);
-    ast->unary_exp = unique_ptr<ExpBaseAST>($2);
-    $$ = ast;
-  }
-  ;
-
-PrimaryExp
-  : '(' Exp ')' {
-    dbg_printf("in PrimaryExp\n");
-
-    auto ast = new PrimaryExpAST(PrimaryExpAST::Tag::EXP);
-    ast->exp = unique_ptr<ExpBaseAST>($2);
-    $$ = ast;
-  }
-  | LVal {
-    dbg_printf("in PrimaryExp\n");
-
-    auto ast = new PrimaryExpAST(PrimaryExpAST::Tag::LVAL);
-    ast->lval = unique_ptr<LValAST>((LValAST*)($1));
-    $$ = ast;
-  }
-  | Number {
-    dbg_printf("in PrimaryExp\n");
-
-    auto ast = new PrimaryExpAST(PrimaryExpAST::Tag::NUMBER);
-    ast->number = $1;
+  | LAndExp LAND EqExp {
+    dbg_printf("in LAndExp\n");
+    auto ast = new LAndExpAST(LAndExpAST::Tag::LAND);
+    ast->land_exp = unique_ptr<ExpBaseAST>($1);
+    ast->eq_exp = unique_ptr<ExpBaseAST>($3);
     $$ = ast;
   }
   ;
 
-LVal
-  : IDENT {
-    dbg_printf("in LVal\n");
-
-    auto ast = new LValAST();
-    ast->ident = *unique_ptr<string>($1);
+LOrExp
+  : LAndExp {
+    dbg_printf("in LOrExp\n");
+    auto ast = new LOrExpAST(LOrExpAST::Tag::LAND);
+    ast->land_exp = unique_ptr<ExpBaseAST>($1);
+    $$ = ast;
+  }
+  | LOrExp LOR LAndExp {
+    dbg_printf("in LOrExp\n");
+    auto ast = new LOrExpAST(LOrExpAST::Tag::LOR);
+    ast->lor_exp = unique_ptr<ExpBaseAST>($1);
+    ast->land_exp = unique_ptr<ExpBaseAST>($3);
     $$ = ast;
   }
   ;
 
-UnaryOp
-  : '+' { 
-    auto op = new string("+");
-    $$ = op;
-  }
-  | '-' {
-    auto op = new string("-");
-    $$ = op;
-  }
-  | '!' { 
-    auto op = new string("!");
-    $$ = op;
-  }
-  ;
-
-
-Number
-  : INT_CONST {
-    $$ = $1;
+ConstExp
+  : Exp {
+    dbg_printf("in ConstExp\n");
+    auto ast = new ConstExpAST();
+    ast->exp = unique_ptr<ExpBaseAST>($1);
+    $$ = ast;
   }
   ;
 

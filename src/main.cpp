@@ -7,8 +7,8 @@
 #include <memory>
 #include <cstring>
 
-#include "include/ast.h"
-#include "include/riscv.h"
+#include "include/ast.hpp"
+#include "include/riscv.hpp"
 
 // #define DEBUG
 #ifdef DEBUG
