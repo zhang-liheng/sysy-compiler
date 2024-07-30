@@ -6,6 +6,7 @@
 #include <sstream>
 #include <iostream>
 #include <vector>
+#include <stack>
 #include <unordered_map>
 #include <cstdlib>
 
@@ -20,6 +21,7 @@
 
 // TODO 总限时一周，搞完
 // TODO 考虑把std::string symbol改成std::variant<int, std::string> symbol
+// TODO 设计清晰命名，方便debug
 
 /**
  * 目前采用如下策略：
@@ -109,20 +111,30 @@ public:
  *              | [Exp] ";"
  *              | Block
  *              | "if" "(" Exp ")" Stmt ["else" Stmt]
+ *              | "while" "(" Exp ")" Stmt
+ *              | "break" ";"
+ *              | "continue" ";"
  *              | "return" [Exp] ";";
  */
 class StmtAST : public BaseAST
 {
 public:
     // TODO 两种设计（初始化和生成IR）方法
-    // 现在的规定是，只有stmt中的ret可以以控制转移语句结尾，其它要么以跳转目标结尾，要么以普通koopa ir语句结尾
-    inline static bool has_ret = false;
+
+    // 上一行Koopa IR是否是br, jump, ret等跳转语句
+    // 在Decl, Stmt这两种BlockItem生成IR前检查该值，若为true，则不生成IR
+    // 在进入下一个Decl或Stmt前确保该值正确
+    inline static bool has_jp = false;
+    inline static std::stack<int> while_cnt_stk;
     enum class Tag
     {
         LVAL,
         EXP,
         BLOCK,
         IF,
+        WHILE,
+        BREAK,
+        CONTINUE,
         RETURN
     } tag;
     std::unique_ptr<LValAST> lval;
@@ -130,6 +142,7 @@ public:
     std::unique_ptr<BaseAST> block;
     std::unique_ptr<BaseAST> if_stmt;
     std::unique_ptr<BaseAST> else_stmt;
+    std::unique_ptr<BaseAST> while_stmt;
 
     void Dump() const override
     {
@@ -141,7 +154,7 @@ public:
     void IR() override
     {
         dbg_printf("in StmtAST\n");
-        if (has_ret)
+        if (has_jp)
         {
             return;
         }
@@ -185,30 +198,74 @@ public:
             else
             {
                 std::cout << "  br " << exp->symbol << ", %then_" << cur_sym_cnt
-                          << ", %end_" << cur_sym_cnt << std::endl;
+                          << ", %if_end_" << cur_sym_cnt << std::endl;
             }
             std::cout << std::endl;
             std::cout << "%then_" << cur_sym_cnt << ":" << std::endl;
-            has_ret = false;
+            has_jp = false;
             if_stmt->IR();
-            if (!has_ret)
+            if (!has_jp)
             {
-                std::cout << "  jump %end_" << cur_sym_cnt << std::endl;
+                std::cout << "  jump %if_end_" << cur_sym_cnt << std::endl;
                 std::cout << std::endl;
             }
             if (else_stmt)
             {
                 std::cout << "%else_" << cur_sym_cnt << ":" << std::endl;
-                has_ret = false;
+                has_jp = false;
                 else_stmt->IR();
-                if (!has_ret)
+                if (!has_jp)
                 {
-                    std::cout << "  jump %end_" << cur_sym_cnt << std::endl;
+                    std::cout << "  jump %if_end_" << cur_sym_cnt << std::endl;
                     std::cout << std::endl;
                 }
             }
-            std::cout << "%end_" << cur_sym_cnt << ":" << std::endl;
-            has_ret = false;
+            std::cout << "%if_end_" << cur_sym_cnt << ":" << std::endl;
+            has_jp = false;
+            break;
+        }
+
+        case Tag::WHILE:
+        {
+            auto cur_sym_cnt = sym_cnt++;
+            std::cout << "  jump %while_entry_" << cur_sym_cnt << std::endl;
+            std::cout << std::endl;
+            std::cout << "%while_entry_" << cur_sym_cnt << ":" << std::endl;
+            while_cnt_stk.push(cur_sym_cnt);
+            exp->IR();
+            std::cout << "  br " << exp->symbol
+                      << ", %while_body_" << cur_sym_cnt
+                      << ", %while_end_" << cur_sym_cnt << std::endl;
+            std::cout << std::endl;
+            std::cout << "%while_body_" << cur_sym_cnt << ":" << std::endl;
+            has_jp = false;
+            while_stmt->IR();
+            if (!has_jp)
+            {
+                std::cout << "  jump %while_entry_" << cur_sym_cnt << std::endl;
+                std::cout << std::endl;
+            }
+            std::cout << "%while_end_" << cur_sym_cnt << ":" << std::endl;
+            while_cnt_stk.pop();
+            has_jp = false;
+            break;
+        }
+
+        case Tag::BREAK:
+        {
+            auto cur_sym_cnt = while_cnt_stk.top();
+            std::cout << "  jump %while_end_" << cur_sym_cnt << std::endl;
+            std::cout << std::endl;
+            has_jp = true;
+            break;
+        }
+
+        case Tag::CONTINUE:
+        {
+            auto cur_sym_cnt = while_cnt_stk.top();
+            std::cout << "  jump %while_entry_" << cur_sym_cnt << std::endl;
+            std::cout << std::endl;
+            has_jp = true;
             break;
         }
 
@@ -223,7 +280,8 @@ public:
             {
                 std::cout << "  ret" << std::endl; // TODO int函数要补成return 0
             }
-            has_ret = true;
+            std::cout << std::endl;
+            has_jp = true;
             break;
         }
 
@@ -260,7 +318,7 @@ public:
         func_type->IR();
         std::cout << " {" << std::endl;
         std::cout << "%entry:" << std::endl; // TODO 权宜之计
-        StmtAST::has_ret = false;
+        StmtAST::has_jp = false;
         block->IR();
         std::cout << "}" << std::endl;
     }
@@ -369,7 +427,7 @@ public:
 
     void IR() override
     {
-        if (StmtAST::has_ret)
+        if (StmtAST::has_jp)
         {
             return;
         }
@@ -439,7 +497,7 @@ public:
 
     void IR() override
     {
-        // TODO 不能用count
+        // TODO 不能用count, 证明命名不会冲突
         auto symbol = "@" + ident + "_" + std::to_string(sym_cnt++);
         sym_tab.insert(ident, SymbolTag::VAR, symbol);
         std::cout << "  " << symbol << " = alloc i32" << std::endl;
