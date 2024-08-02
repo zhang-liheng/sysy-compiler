@@ -192,6 +192,21 @@ public:
     {
         return table.size() == 1;
     }
+
+    /**
+     * @brief 在全局作用域中查找符号，用于查找函数符号
+     *
+     * 因为SysY语法规定局部变量可以与函数同名，使用普通查找时函数可能会被局部变量覆盖。
+     * 一个简单的解决方案是，利用全局符号不能同名的规定，在全局作用域中查找函数符号
+     *
+     * @param ident SysY标识符
+     * @return std::shared_ptr<SymbolInfo>
+     */
+    std::shared_ptr<SymbolInfo> find_in_global_scope(const std::string &ident) const
+    {
+        assert(table.front()->contains(ident));
+        return table.front()->operator[](ident);
+    }
 };
 
 #endif

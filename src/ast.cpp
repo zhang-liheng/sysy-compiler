@@ -133,6 +133,7 @@ void FuncDefAST::IR()
     }
     auto sym_tag = func_type->type == FuncTypeAST::Type::VOID ? SymbolTag::VOID
                                                               : SymbolTag::INT;
+    assert(sym_tab.in_global_scope());
     sym_tab.insert(ident, sym_tag, symbol);
 
     sym_tab.push();
@@ -503,7 +504,7 @@ void UnaryExpAST::IR()
         {
             func_r_params->IR();
         }
-        auto sym_info = sym_tab[ident];
+        auto sym_info = sym_tab.find_in_global_scope(ident);
         if (sym_info->tag == SymbolTag::VOID)
         {
             std::cout << "  call " << sym_info->symbol << "(";
