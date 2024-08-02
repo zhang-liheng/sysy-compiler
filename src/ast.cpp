@@ -1,23 +1,22 @@
 #include "include/ast.hpp"
 #include "include/symtab.hpp"
 
-void CompUnitAST::Dump() const
-{
-    std::cout << "CompUnitAST { ";
-    func_def->Dump();
-    std::cout << " }";
-}
+void CompUnitAST::Dump() const {}
 
 void CompUnitAST::IR()
 {
     dbg_printf("in CompUnitAST\n");
-    func_def->IR();
+    for (auto &unit : comp_units)
+    {
+        unit->IR();
+    }
 }
 
 void DeclAST::Dump() const {}
 
 void DeclAST::IR()
 {
+    dbg_printf("in DeclAST\n");
     if (StmtAST::has_jp)
     {
         return;
@@ -36,6 +35,7 @@ void ConstDeclAST::Dump() const {}
 
 void ConstDeclAST::IR()
 {
+    dbg_printf("in ConstDeclAST\n");
     for (auto &def : const_defs)
     {
         def->IR();
@@ -46,6 +46,7 @@ void ConstDefAST::Dump() const {}
 
 void ConstDefAST::IR()
 {
+    dbg_printf("in ConstDefAST\n");
     const_init_val->IR();
     sym_tab.insert(ident, SymbolTag::CONST, const_init_val->symbol);
 }
@@ -54,6 +55,7 @@ void ConstInitValAST::Dump() const {}
 
 void ConstInitValAST::IR()
 {
+    dbg_printf("in ConstInitValAST\n");
     const_exp->IR();
     is_const = const_exp->is_const;
     symbol = const_exp->symbol;
@@ -63,6 +65,7 @@ void VarDeclAST::Dump() const {}
 
 void VarDeclAST::IR()
 {
+    dbg_printf("in VarDeclAST\n");
     for (auto &def : var_defs)
     {
         def->IR();
@@ -73,14 +76,32 @@ void VarDefAST::Dump() const {}
 
 void VarDefAST::IR()
 {
-    // TODO 不能用count, 证明命名不会冲突
+    dbg_printf("in VarDefAST\n");
     auto symbol = "@" + ident + "_" + std::to_string(sym_cnt++);
     sym_tab.insert(ident, SymbolTag::VAR, symbol);
-    std::cout << "  " << symbol << " = alloc i32" << std::endl;
-    if (init_val)
+    if (sym_tab.in_global_scope())
     {
-        init_val->IR();
-        std::cout << "  store " << init_val->symbol << ", " << symbol << std::endl;
+        std::cout << "global " << symbol << " = alloc i32, ";
+        if (init_val)
+        {
+            init_val->IR();
+            std::cout << init_val->symbol << std::endl;
+        }
+        else
+        {
+            std::cout << "zeroinit" << std::endl;
+        }
+        std::cout << std::endl;
+    }
+    else
+    {
+        std::cout << "  " << symbol << " = alloc i32" << std::endl;
+        if (init_val)
+        {
+            init_val->IR();
+            std::cout << "  store " << init_val->symbol
+                      << ", " << symbol << std::endl;
+        }
     }
 }
 
@@ -88,6 +109,7 @@ void InitValAST::Dump() const {}
 
 void InitValAST::IR()
 {
+    dbg_printf("in InitValAST\n");
     exp->IR();
     is_const = exp->is_const;
     symbol = exp->symbol;
@@ -96,7 +118,6 @@ void InitValAST::IR()
 void FuncDefAST::Dump() const
 {
     std::cout << "FuncDefAST { ";
-    func_type->Dump();
     std::cout << ", " << ident << ", ";
     block->Dump();
     std::cout << "}";
@@ -105,27 +126,90 @@ void FuncDefAST::Dump() const
 void FuncDefAST::IR()
 {
     dbg_printf("in FuncDefAST\n");
-    sym_cnt = 0;
-    std::cout << "fun @" << ident << "(): ";
+    auto symbol = "@" + ident;
+    if (ident != "main")
+    {
+        symbol += "_" + std::to_string(sym_cnt++);
+    }
+    auto sym_tag = func_type->type == FuncTypeAST::Type::VOID ? SymbolTag::VOID
+                                                              : SymbolTag::INT;
+    sym_tab.insert(ident, sym_tag, symbol);
+
+    sym_tab.push();
+    std::cout << "fun " << symbol << "(";
+    if (func_f_params)
+    {
+        func_f_params->IR();
+    }
+    std::cout << ")";
     func_type->IR();
     std::cout << " {" << std::endl;
-    std::cout << "%entry:" << std::endl; // TODO 权宜之计
+    std::cout << "%entry:" << std::endl;
     StmtAST::has_jp = false;
+    if (func_f_params)
+    {
+        sym_tab.push(); // 为了函数参数的符号表
+        for (auto &param : func_f_params->func_f_params)
+        {
+            auto sym_info = sym_tab[param->ident];
+            auto symbol = "%" + param->ident + "_" + std::to_string(sym_cnt++);
+            sym_tab.insert(param->ident, SymbolTag::VAR, symbol);
+            std::cout << "  " << symbol << " = alloc i32" << std::endl;
+            std::cout << "  store " << sym_info->symbol
+                      << ", " << symbol << std::endl;
+        }
+    }
     block->IR();
+    if (!StmtAST::has_jp) // TODO int函数要补成return 0
+    {
+        std::cout << "  ret" << std::endl;
+    }
     std::cout << "}" << std::endl;
+    std::cout << std::endl;
+    if (func_f_params)
+    {
+        sym_tab.pop();
+    }
+    sym_tab.pop();
 }
 
-void FuncTypeAST::Dump() const
-{
-    std::cout << "FuncTypeAST { ";
-    std::cout << type;
-    std::cout << " }";
-}
+void FuncTypeAST::Dump() const {}
 
 void FuncTypeAST::IR()
 {
     dbg_printf("in FuncTypeAST\n");
     std::cout << type_ir[type];
+    dbg_printf("not in FuncTypeAST\n");
+}
+
+void FuncFParamsAST::Dump() const {}
+
+void FuncFParamsAST::IR()
+{
+    dbg_printf("in FuncFParamsAST\n");
+    bool is_first = true;
+    for (auto &param : func_f_params)
+    {
+        if (is_first)
+        {
+            is_first = false;
+        }
+        else
+        {
+            std::cout << ", ";
+        }
+        param->IR();
+    }
+}
+
+void FuncFParamAST::Dump() const {}
+
+void FuncFParamAST::IR()
+{
+    dbg_printf("in FuncFParamAST\n");
+    auto symbol = "@" + ident + "_" + std::to_string(sym_cnt++);
+    sym_tab.insert(ident, SymbolTag::VAR, symbol);
+    std::cout << symbol << ": i32";
 }
 
 void BlockAST::Dump() const
@@ -153,6 +237,7 @@ void BlockItemAST::Dump() const {}
 
 void BlockItemAST::IR()
 {
+    dbg_printf("in BlockItemAST\n");
     switch (tag)
     {
     case Tag::DECL:
@@ -401,14 +486,56 @@ void UnaryExpAST::Dump() const
 void UnaryExpAST::IR()
 {
     dbg_printf("in UnaryExpAST\n");
-    if (tag == Tag::PRIMARY)
+    switch (tag)
     {
+    case Tag::PRIMARY:
+    {
+        dbg_printf("is primary\n");
         primary_exp->IR();
         is_const = primary_exp->is_const;
         symbol = primary_exp->symbol;
+        break;
     }
-    else
+    case Tag::IDENT:
     {
+        dbg_printf("is ident\n");
+        if (func_r_params)
+        {
+            func_r_params->IR();
+        }
+        auto sym_info = sym_tab[ident];
+        if (sym_info->tag == SymbolTag::VOID)
+        {
+            std::cout << "  call " << sym_info->symbol << "(";
+        }
+        else
+        {
+            symbol = "%" + std::to_string(sym_cnt++);
+            std::cout << "  " << symbol << " = call " << sym_info->symbol << "(";
+        }
+        if (func_r_params)
+        {
+            bool is_first = true;
+            for (auto &exp : func_r_params->exps)
+            {
+                if (is_first)
+                {
+                    is_first = false;
+                }
+                else
+                {
+                    std::cout << ", ";
+                }
+                std::cout << exp->symbol;
+            }
+        }
+
+        std::cout << ")" << std::endl;
+        break;
+    }
+    case Tag::UNARY:
+    {
+        dbg_printf("is unary\n");
         unary_exp->IR();
         is_const = unary_exp->is_const;
         if (is_const)
@@ -440,8 +567,24 @@ void UnaryExpAST::IR()
                           << " 0, " << unary_exp->symbol << std::endl;
             }
         }
+        break;
+    default:
+        assert(false);
     }
+    }
+
     dbg_printf("not in unary\n");
+}
+
+void FuncRParamsAST::Dump() const {}
+
+void FuncRParamsAST::IR()
+{
+    dbg_printf("in FuncRParamsAST\n");
+    for (auto &exp : exps)
+    {
+        exp->IR();
+    }
 }
 
 void MulExpAST::Dump() const {}
@@ -765,6 +908,7 @@ void ConstExpAST::Dump() const {}
 
 void ConstExpAST::IR()
 {
+    dbg_printf("in ConstExpAST\n");
     exp->IR();
     is_const = exp->is_const;
     symbol = exp->symbol;

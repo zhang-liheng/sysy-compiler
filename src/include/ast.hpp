@@ -19,7 +19,6 @@
 #define dbg_printf(...)
 #endif
 
-// TODO 总限时一周，搞完
 // TODO 考虑把std::string symbol改成std::variant<int, std::string> symbol
 // TODO 设计清晰命名，方便debug
 
@@ -85,12 +84,12 @@ public:
 };
 
 /**
- * @brief CompUnit  ::= FuncDef;
+ * @brief CompUnit ::= [CompUnit] (Decl | FuncDef);
  */
 class CompUnitAST : public BaseAST
 {
 public:
-    std::unique_ptr<BaseAST> func_def;
+    std::vector<std::unique_ptr<BaseAST>> comp_units;
 
     void Dump() const override;
 
@@ -201,14 +200,17 @@ public:
 };
 
 /**
- * @brief FuncDef   ::= FuncType IDENT "(" ")" Block;
+ * @brief FuncType    ::= "void" | "int";
  */
-class FuncDefAST : public BaseAST
+class FuncTypeAST : public BaseAST
 {
 public:
-    std::unique_ptr<BaseAST> func_type;
-    std::string ident;
-    std::unique_ptr<BaseAST> block;
+    inline static const std::vector<std::string> type_ir{"", ": i32"};
+    enum Type
+    {
+        VOID,
+        INT
+    } type;
 
     void Dump() const override;
 
@@ -216,14 +218,43 @@ public:
 };
 
 /**
- * @brief FuncType  ::= "int";
+ * @brief FuncFParam  ::= BType IDENT;
+ * BType              ::= "int";
  */
-class FuncTypeAST : public BaseAST
+class FuncFParamAST : public BaseAST
 {
 public:
-    inline static std::unordered_map<std::string, std::string> type_ir = {
-        {"int", "i32"}};
-    std::string type;
+    std::string ident;
+
+    void Dump() const override;
+
+    void IR() override;
+};
+
+/**
+ * @brief FuncFParams ::= FuncFParam {"," FuncFParam};
+ */
+class FuncFParamsAST : public BaseAST
+{
+public:
+    std::vector<std::unique_ptr<FuncFParamAST>> func_f_params;
+
+    void Dump() const override;
+
+    void IR() override;
+};
+
+/**
+ * @brief FuncDef   ::= FuncType IDENT "(" [FuncFParams] ")" Block;
+ * FuncType    ::= "void" | "int";
+ */
+class FuncDefAST : public BaseAST
+{
+public:
+    std::unique_ptr<FuncTypeAST> func_type;
+    std::string ident;
+    std::unique_ptr<FuncFParamsAST> func_f_params;
+    std::unique_ptr<BaseAST> block;
 
     void Dump() const override;
 
@@ -342,7 +373,22 @@ public:
 };
 
 /**
- * @brief UnaryExp    ::= PrimaryExp | UnaryOp UnaryExp;
+ * @brief FuncRParams ::= Exp {"," Exp};
+ */
+class FuncRParamsAST : public BaseAST
+{
+public:
+    std::vector<std::unique_ptr<ExpBaseAST>> exps;
+
+    void Dump() const override;
+
+    void IR() override;
+};
+
+/**
+ * @brief UnaryExp    ::= PrimaryExp
+ *                      | IDENT "(" [FuncRParams] ")"
+ *                      | UnaryOp UnaryExp;
  */
 class UnaryExpAST : public ExpBaseAST
 {
@@ -350,12 +396,15 @@ public:
     enum class Tag
     {
         PRIMARY,
-        OP
+        IDENT,
+        UNARY
     } tag;
     inline static const std::unordered_map<std::string, std::string> op_ir{
         {"-", "sub"},
         {"!", "eq"}};
     std::unique_ptr<ExpBaseAST> primary_exp;
+    std::string ident;
+    std::unique_ptr<FuncRParamsAST> func_r_params;
     std::string unary_op;
     std::unique_ptr<ExpBaseAST> unary_exp;
 

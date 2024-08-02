@@ -25,7 +25,9 @@
 enum class SymbolTag
 {
     CONST,
-    VAR
+    VAR,
+    VOID,
+    INT
 };
 
 class SymbolInfo
@@ -101,6 +103,14 @@ public:
     SymbolTable()
     {
         table.emplace_back(std::make_unique<ScopeSymbolTable>());
+        table.back()->insert("getint", SymbolTag::INT, "@getint");
+        table.back()->insert("getch", SymbolTag::INT, "@getch");
+        table.back()->insert("getarray", SymbolTag::INT, "@getarray");
+        table.back()->insert("putint", SymbolTag::VOID, "@putint");
+        table.back()->insert("putch", SymbolTag::VOID, "@putch");
+        table.back()->insert("putarray", SymbolTag::VOID, "@putarray");
+        table.back()->insert("starttime", SymbolTag::VOID, "@starttime");
+        table.back()->insert("stoptime", SymbolTag::VOID, "@stoptime");
     }
 
     /**
@@ -155,25 +165,6 @@ public:
     }
 
     /**
-     * @brief 给定一个符号, 查询符号表中这个符号的定义出现次数
-     *
-     * @param ident SysY标识符
-     * @return int
-     */
-    int count(const std::string &ident) const
-    {
-        int cnt = 0;
-        for (auto it = table.rbegin(); it != table.rend(); ++it)
-        {
-            if ((*it)->contains(ident))
-            {
-                cnt++;
-            }
-        }
-        return cnt;
-    }
-
-    /**
      * @brief 给定一个符号表中已经存在的符号, 返回这个符号对应的SymbolInfo
      *
      * @param ident SysY标识符
@@ -189,6 +180,17 @@ public:
             }
         }
         assert(false);
+    }
+
+    /**
+     * @brief 是否在全局作用域
+     *
+     * @return true
+     * @return false
+     */
+    bool in_global_scope()
+    {
+        return table.size() == 1;
     }
 };
 

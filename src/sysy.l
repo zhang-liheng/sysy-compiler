@@ -35,6 +35,7 @@ Hexadecimal   0[xX][0-9a-fA-F]+
 {BlockComment}  { /* 忽略, 不做任何操作 */ }
 
 "int"           { return INT; }
+"void"          { return VOID; }
 "return"        { return RETURN; }
 "const"         { return CONST; }
 "if"            { return IF; }
@@ -45,12 +46,12 @@ Hexadecimal   0[xX][0-9a-fA-F]+
 
 "<"             { return LT; }
 ">"             { return GT; }
-"<="             { return LE; }
-">="             { return GE; }
-"=="             { return EQ; }
-"!="             { return NE; }
-"&&"             { return LAND; }
-"||"             { return LOR; }
+"<="            { return LE; }
+">="            { return GE; }
+"=="            { return EQ; }
+"!="            { return NE; }
+"&&"            { return LAND; }
+"||"            { return LOR; }
 
 
 {Identifier}    { yylval.str_val = new string(yytext); return IDENT; }

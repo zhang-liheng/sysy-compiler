@@ -48,13 +48,15 @@ using namespace std;
 
 // lexer 返回的所有 token 种类的声明
 // 注意 IDENT 和 INT_CONST 会返回 token 的值, 分别对应 str_val 和 int_val
-%token INT RETURN LT GT LE GE EQ NE LAND LOR CONST IF ELSE WHILE BREAK CONTINUE
+%token INT VOID RETURN LT GT LE GE EQ NE LAND LOR CONST IF ELSE WHILE BREAK 
+CONTINUE
 %token <str_val> IDENT
 %token <int_val> INT_CONST
 
 // 非终结符的类型定义
-%type <ast_val> CompUnit Decl ConstDecl ConstDef ConstDefList VarDecl VarDef 
-VarDefList FuncDef FuncType Block BlockItem BlockItemList Stmt LVal 
+%type <ast_val> CompUnit CompUnitList Decl ConstDecl ConstDef ConstDefList 
+VarDecl VarDef VarDefList FuncDef FuncType FuncFParams FuncFParam Block 
+BlockItem BlockItemList Stmt LVal FuncRParams
 %type <exp_val> ConstInitVal InitVal Exp PrimaryExp UnaryExp MulExp AddExp 
 RelExp EqExp LAndExp LOrExp ConstExp 
 %type <int_val> Number
@@ -72,11 +74,47 @@ RelExp EqExp LAndExp LOrExp ConstExp
 // 此时我们应该把 FuncDef 返回的结果收集起来, 作为 AST 传给调用 parser 的函数
 // $1 指代规则里第一个符号的返回值, 也就是 FuncDef 的返回值
 CompUnit
-  : FuncDef {
+  : CompUnitList {
     dbg_printf("in CompUnit\n");
-    auto comp_unit = make_unique<CompUnitAST>();
-    comp_unit->func_def = unique_ptr<BaseAST>($1);
+    auto comp_unit = unique_ptr<BaseAST>($1);
     ast = move(comp_unit);
+  }
+  ;
+
+CompUnitList
+  : FuncDef {
+    dbg_printf("in CompUnitList\n");
+    auto ast = new CompUnitAST();
+    ast->comp_units.emplace_back(unique_ptr<BaseAST>($1));
+    $$ = ast;
+  }
+  | Decl {
+    dbg_printf("in CompUnitList\n");
+    auto ast = new CompUnitAST();
+    ast->comp_units.emplace_back(unique_ptr<BaseAST>($1));
+    $$ = ast;
+  }
+  | FuncDef CompUnitList {
+    dbg_printf("in CompUnitList\n");
+    auto ast = new CompUnitAST();
+    ast->comp_units.emplace_back(unique_ptr<BaseAST>($1));
+    auto comp_unit_list = unique_ptr<CompUnitAST>((CompUnitAST*)($2));
+    for(auto &item : comp_unit_list->comp_units)
+    {
+      ast->comp_units.emplace_back(move(item));
+    }
+    $$ = ast;
+  }
+  | Decl CompUnitList {
+    dbg_printf("in CompUnitList\n");
+    auto ast = new CompUnitAST();
+    ast->comp_units.emplace_back(unique_ptr<BaseAST>($1));
+    auto comp_unit_list = unique_ptr<CompUnitAST>((CompUnitAST*)($2));
+    for(auto &item : comp_unit_list->comp_units)
+    {
+      ast->comp_units.emplace_back(move(item));
+    }
+    $$ = ast;
   }
   ;
 
@@ -98,14 +136,15 @@ Decl
   ;
 
 ConstDecl
-  : CONST INT ConstDef ConstDefList ';' {
+  : CONST FuncType ConstDef ConstDefList ';' {
     dbg_printf("in ConstDecl\n");
     auto ast = new ConstDeclAST();
-    ast->const_defs.emplace_back(std::move(unique_ptr<BaseAST>($3)));
+    auto tmp = unique_ptr<FuncTypeAST>((FuncTypeAST*)($2));
+    ast->const_defs.emplace_back(move(unique_ptr<BaseAST>($3)));
     auto const_def_list = unique_ptr<ConstDeclAST>((ConstDeclAST*)($4));
     for(auto &item : const_def_list->const_defs)
     {
-      ast->const_defs.emplace_back(std::move(item));
+      ast->const_defs.emplace_back(move(item));
     }
     $$ = ast;
   }
@@ -121,10 +160,10 @@ ConstDefList
     auto ast = new ConstDeclAST();
     auto const_def = unique_ptr<BaseAST>($2);
     auto const_def_list = unique_ptr<ConstDeclAST>((ConstDeclAST*)($3));
-    ast->const_defs.emplace_back(std::move(const_def));
+    ast->const_defs.emplace_back(move(const_def));
     for(auto &item : const_def_list->const_defs)
     {
-      ast->const_defs.emplace_back(std::move(item));
+      ast->const_defs.emplace_back(move(item));
     }
     $$ = ast;
   }
@@ -150,14 +189,15 @@ ConstInitVal
   ;
 
 VarDecl
-  : INT VarDef VarDefList ';' {
+  : FuncType VarDef VarDefList ';' {
     dbg_printf("in VarDecl\n");
     auto ast = new VarDeclAST();
+    auto tmp = unique_ptr<FuncTypeAST>((FuncTypeAST*)($1));
     ast->var_defs.emplace_back(unique_ptr<BaseAST>($2));
     auto var_def_list = unique_ptr<VarDeclAST>((VarDeclAST*)($3));
     for(auto &item : var_def_list->var_defs)
     {
-      ast->var_defs.emplace_back(std::move(item));
+      ast->var_defs.emplace_back(move(item));
     }
     $$ = ast;
   }
@@ -171,11 +211,11 @@ VarDefList
   | ',' VarDef VarDefList {
     dbg_printf("in VarDefList\n");
     auto ast = new VarDeclAST();
-    ast->var_defs.emplace_back(std::move(unique_ptr<BaseAST>($2)));
+    ast->var_defs.emplace_back(move(unique_ptr<BaseAST>($2)));
     auto var_def_list = unique_ptr<VarDeclAST>((VarDeclAST*)($3));
     for(auto &item : var_def_list->var_defs)
     {
-      ast->var_defs.emplace_back(std::move(item));
+      ast->var_defs.emplace_back(move(item));
     }
     $$ = ast;
   }
@@ -221,20 +261,63 @@ FuncDef
     dbg_printf("in FuncDef\n");
 
     auto ast = new FuncDefAST();
-    ast->func_type = unique_ptr<BaseAST>($1);
+    ast->func_type = unique_ptr<FuncTypeAST>((FuncTypeAST*)($1));
     ast->ident = *unique_ptr<string>($2);
     ast->block = unique_ptr<BaseAST>($5);
     $$ = ast;
   }
+  | FuncType IDENT '(' FuncFParams ')' Block {
+    dbg_printf("in FuncDef\n");
+
+    auto ast = new FuncDefAST();
+    ast->func_type = unique_ptr<FuncTypeAST>((FuncTypeAST*)($1));
+    ast->ident = *unique_ptr<string>($2);
+    ast->func_f_params = unique_ptr<FuncFParamsAST>((FuncFParamsAST*)($4));
+    ast->block = unique_ptr<BaseAST>($6);
+    $$ = ast;
+  }
   ;
 
-// 同上, 不再解释
 FuncType
-  : INT {
+  : VOID {
     dbg_printf("in FuncType\n");
-
     auto ast = new FuncTypeAST();
-    ast->type = "int";
+    ast->type = FuncTypeAST::Type::VOID;
+    $$ = ast;
+  }
+  | INT {
+    dbg_printf("in FuncType\n");
+    auto ast = new FuncTypeAST();
+    ast->type = FuncTypeAST::Type::INT;
+    $$ = ast;
+  }
+  ;
+
+FuncFParams
+  : FuncFParam { 
+    dbg_printf("in FuncFParams\n");
+    auto ast = new FuncFParamsAST(); 
+    ast->func_f_params.emplace_back(unique_ptr<FuncFParamAST>((FuncFParamAST*)($1)));
+    $$ = ast;
+  }
+  | FuncFParam ',' FuncFParams {
+    dbg_printf("in FuncFParams\n");
+    auto ast = new FuncFParamsAST();
+    ast->func_f_params.emplace_back(unique_ptr<FuncFParamAST>((FuncFParamAST*)($1)));
+    auto func_f_params = unique_ptr<FuncFParamsAST>((FuncFParamsAST*)($3));
+    for(auto &param : func_f_params->func_f_params)
+    {
+      ast->func_f_params.emplace_back(move(param));
+    }
+    $$ = ast;
+  }
+  ;
+
+FuncFParam
+  : INT IDENT {
+    dbg_printf("in FuncFParam\n");
+    auto ast = new FuncFParamAST();
+    ast->ident = *unique_ptr<string>($2);
     $$ = ast;
   }
   ;
@@ -256,10 +339,10 @@ BlockItemList
     auto ast = new BlockAST();
     auto block_item = unique_ptr<BaseAST>($1);
     auto block_item_list = unique_ptr<BlockAST>((BlockAST*)($2));
-    ast->block_items.emplace_back(std::move(block_item));
+    ast->block_items.emplace_back(move(block_item));
     for(auto &item : block_item_list->block_items)
     {
-      ast->block_items.emplace_back(std::move(item));
+      ast->block_items.emplace_back(move(item));
     }
     $$ = ast;
   }
@@ -421,12 +504,49 @@ UnaryExp
     ast->primary_exp = unique_ptr<ExpBaseAST>($1);
     $$ = ast;
   }
+  | IDENT '(' ')' {
+    dbg_printf("in UnaryExp\n");
+
+    auto ast = new UnaryExpAST(UnaryExpAST::Tag::IDENT);
+    ast->ident = *unique_ptr<string>($1);
+    $$ = ast;
+  }
+  | IDENT '(' FuncRParams ')' {
+    dbg_printf("in UnaryExp\n");
+
+    auto ast = new UnaryExpAST(UnaryExpAST::Tag::IDENT);
+    ast->ident = *unique_ptr<string>($1);
+    ast->func_r_params = unique_ptr<FuncRParamsAST>((FuncRParamsAST*)($3));
+    $$ = ast;
+  }
   | UnaryOp UnaryExp {
     dbg_printf("in UnaryExp\n");
 
-    auto ast = new UnaryExpAST(UnaryExpAST::Tag::OP);
+    auto ast = new UnaryExpAST(UnaryExpAST::Tag::UNARY);
     ast->unary_op = *unique_ptr<string>($1);
     ast->unary_exp = unique_ptr<ExpBaseAST>($2);
+    $$ = ast;
+  }
+  ;
+
+FuncRParams
+  : Exp {
+    dbg_printf("in FuncRParams\n");
+
+    auto ast = new FuncRParamsAST();
+    ast->exps.emplace_back(unique_ptr<ExpBaseAST>($1));
+    $$ = ast;
+  }
+  | Exp ',' FuncRParams {
+    dbg_printf("in FuncRParams\n");
+
+    auto ast = new FuncRParamsAST();
+    ast->exps.emplace_back(unique_ptr<ExpBaseAST>($1));
+    auto func_r_params = unique_ptr<FuncRParamsAST>((FuncRParamsAST*)($3));
+    for(auto &exp : func_r_params->exps)
+    {
+      ast->exps.emplace_back(move(exp));
+    }
     $$ = ast;
   }
   ;
