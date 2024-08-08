@@ -20,7 +20,6 @@
 #endif
 
 // TODO 考虑把std::string symbol改成std::variant<int, std::string> symbol
-// TODO 设计清晰命名，方便debug
 
 /**
  * 特点：
@@ -43,10 +42,6 @@
  * 在变量定义时，若右边表达式不包含变量，也能计算出值。
  * 3. 这是一种妥协，将SSA形式和稀疏条件常量传播留到最后再做。
  */
-
-static int sym_cnt = 0;
-
-static SymbolTable sym_tab;
 
 /**
  * @brief 按照官方文档的写法，所有成员变量均为public，不提供get和set方法

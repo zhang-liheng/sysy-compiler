@@ -1,6 +1,10 @@
 #include "include/ast.hpp"
 #include "include/symtab.hpp"
 
+static int sym_cnt = 0;
+
+static SymbolTable sym_tab;
+
 void CompUnitAST::Dump() const {}
 
 void CompUnitAST::IR()
@@ -805,7 +809,6 @@ void LAndExpAST::IR()
         }
         else
         {
-            // TODO 考虑变量koopa ir是否可能重名，还有各种ir
             is_const = false;
             auto cur_sym_cnt = sym_cnt++;
             auto res_sym = "%land_res_" + std::to_string(sym_cnt++);
@@ -880,7 +883,6 @@ void LOrExpAST::IR()
         }
         else
         {
-            // TODO 考虑变量koopa ir是否可能重名，还有各种ir
             is_const = false;
             auto cur_sym_cnt = sym_cnt++;
             auto res_sym = "%lor_res_" + std::to_string(sym_cnt++);

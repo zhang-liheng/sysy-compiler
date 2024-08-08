@@ -1,7 +1,5 @@
-/.vscode
-/.VSCodeCounter
-/.tmp.driveupload
+/.*
 /build
 /debug
 /src/include/koopa.h
-TODO.md
+/TODO.md

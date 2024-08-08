@@ -83,12 +83,12 @@ int main(int argc, const char *argv[])
         // 重定向cout到ss
         std::cout.rdbuf(ss.rdbuf());
         // 输出解析得到的 Koopa IR, 其实就是个字符串
+        decl_IR();
         ast->IR();
         // 重定向cout到outfile
         std::cout.rdbuf(outfile.rdbuf());
         // 生成目标代码
-        KoopaRiscvBuilder builder;
-        builder.BuildRiscv(ss.str());
+        BuildRiscv(ss.str());
         // 恢复cout的原始缓冲区，以便恢复到标准输出
         std::cout.rdbuf(cout_buf);
     }
