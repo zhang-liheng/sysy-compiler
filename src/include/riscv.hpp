@@ -121,6 +121,7 @@ public:
 
     int offset(const koopa_raw_value_t &value)
     {
+        assert(has_val(value));
         return val_offset[value];
     }
 
@@ -530,7 +531,6 @@ void Visit(const koopa_raw_branch_t &branch)
         }
         return;
     }
-    assert(stk.has_val(branch.cond));
     auto offset = stk.offset(branch.cond);
     if (offset > 2047)
     {
@@ -587,28 +587,11 @@ void Visit(const koopa_raw_return_t &ret)
     // return 指令中, value 代表返回值
     koopa_raw_value_t ret_value = ret.value;
 
-    if (ret_value == nullptr)
-    {
-        Epilogue();
-        return;
-    }
-
-    switch (ret_value->kind.tag)
-    {
-    case KOOPA_RVT_INTEGER:
-    {
-        // 于是我们可以按照处理 integer 的方式处理 ret_value
-        // integer 中, value 代表整数的数值
-        Load("a0", ret_value);
-        break;
-    }
-
-    default:
+    if (ret_value != nullptr)
     {
         Load("a0", ret_value);
-        break;
     }
-    }
+
     Epilogue();
 }
 
@@ -652,7 +635,6 @@ void Load(const std::string &dest, const koopa_raw_value_t &src)
     }
     default:
     {
-        assert(stk.has_val(src));
         auto offset = stk.offset(src);
         if (offset > 2047)
         {
@@ -681,7 +663,6 @@ void Store(const std::string &src, const koopa_raw_value_t &dest)
     }
     default:
     {
-        assert(stk.has_val(dest));
         auto offset = stk.offset(dest);
         if (offset > 2047)
         {
