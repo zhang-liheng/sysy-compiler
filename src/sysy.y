@@ -57,8 +57,8 @@ CONTINUE
 %type <ast_val> CompUnit CompUnitList Decl ConstDecl ConstDef ConstDefList 
 ConstExpList VarDecl VarDef VarDefList FuncDef FuncType FuncFParams FuncFParam 
 Block BlockItem BlockItemList Stmt LVal ExpList FuncRParams
-%type <exp_val> ConstInitVal ConstInitValList InitVal Exp PrimaryExp UnaryExp 
-MulExp AddExp RelExp EqExp LAndExp LOrExp ConstExp 
+%type <exp_val> ConstInitVal ConstInitValList InitVal InitValList Exp PrimaryExp
+UnaryExp MulExp AddExp RelExp EqExp LAndExp LOrExp ConstExp 
 %type <int_val> Number
 %type <str_val> UnaryOp
 
@@ -283,17 +283,27 @@ VarDefList
   ;
 
 VarDef
-  : IDENT {
+  : IDENT ConstExpList {
     dbg_printf("in VarDef\n");
     auto ast = new VarDefAST();
     ast->ident = *unique_ptr<string>($1);
+    auto const_exp_list = unique_ptr<ConstDefAST>((ConstDefAST*)($2));
+    for(auto &item : const_exp_list->const_exps)
+    {
+      ast->const_exps.emplace_back(move(item));
+    }
     $$ = ast;
   }
-  | IDENT '=' InitVal {
+  | IDENT ConstExpList '=' InitVal {
     dbg_printf("in VarDef\n");
     auto ast = new VarDefAST();
     ast->ident = *unique_ptr<string>($1);
-    ast->init_val = unique_ptr<ExpBaseAST>($3);
+    auto const_exp_list = unique_ptr<ConstDefAST>((ConstDefAST*)($2));
+    for(auto &item : const_exp_list->const_exps)
+    {
+      ast->const_exps.emplace_back(move(item));
+    }
+    ast->init_val = unique_ptr<InitValAST>((InitValAST*)($4));
     $$ = ast;
   }
   ;
@@ -302,7 +312,45 @@ InitVal
   : Exp {
     dbg_printf("in InitVal\n");
     auto ast = new InitValAST();
+    ast->tag = InitValAST::Tag::EXP;
     ast->exp = unique_ptr<ExpBaseAST>($1);
+    $$ = ast;
+  }
+  | '{' '}' {
+    dbg_printf("in InitVal\n");
+    auto ast = new InitValAST();
+    ast->tag = InitValAST::Tag::VAL;
+    $$ = ast;
+  }
+  | '{' InitValList '}' {
+    dbg_printf("in InitVal\n");
+    auto ast = new InitValAST();
+    ast->tag = InitValAST::Tag::VAL;
+    auto init_val_list = unique_ptr<InitValAST>((InitValAST*)($2));
+    for(auto &item : init_val_list->init_vals)
+    {
+      ast->init_vals.emplace_back(move(item));
+    }
+    $$ = ast;
+  }
+  ;
+
+InitValList
+  : InitVal {
+    dbg_printf("in InitValList\n");
+    auto ast = new InitValAST();
+    ast->init_vals.emplace_back(unique_ptr<InitValAST>((InitValAST*)($1)));
+    $$ = ast;
+  }
+  | InitVal ',' InitValList {
+    dbg_printf("in InitValList\n");
+    auto ast = new InitValAST();
+    ast->init_vals.emplace_back(unique_ptr<InitValAST>((InitValAST*)($1)));
+    auto init_val_list = unique_ptr<InitValAST>((InitValAST*)($3));
+    for(auto &item : init_val_list->init_vals)
+    {
+      ast->init_vals.emplace_back(move(item));
+    }
     $$ = ast;
   }
   ;

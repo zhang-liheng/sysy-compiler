@@ -233,14 +233,18 @@ public:
 };
 
 /**
- * @brief VarDef        ::= IDENT {"[" ConstExp "]"}
- *                      | IDENT {"[" ConstExp "]"} "=" InitVal;
+ * @brief InitVal       ::= Exp | "{" [InitVal {"," InitVal}] "}";
  */
-class VarDefAST : public BaseAST
+class InitValAST : public ExpBaseAST
 {
 public:
-    std::string ident;
-    std::unique_ptr<ExpBaseAST> init_val;
+    enum class Tag
+    {
+        EXP,
+        VAL
+    } tag;
+    std::unique_ptr<ExpBaseAST> exp;
+    std::vector<std::unique_ptr<InitValAST>> init_vals;
 
     void Dump() const override;
 
@@ -248,16 +252,57 @@ public:
 };
 
 /**
- * @brief InitVal       ::= Exp | "{" [InitVal {"," InitVal}] "}";
+ * @brief VarDef        ::= IDENT {"[" ConstExp "]"}
+ *                      | IDENT {"[" ConstExp "]"} "=" InitVal;
  */
-class InitValAST : public ExpBaseAST
+class VarDefAST : public BaseAST
 {
 public:
-    std::unique_ptr<ExpBaseAST> exp;
+    std::string ident;
+    std::vector<std::unique_ptr<ExpBaseAST>> const_exps;
+    std::unique_ptr<InitValAST> init_val;
 
     void Dump() const override;
 
     void IR() override;
+
+    /**
+     * @brief 进到待编译程序给出的初始化列表的一个大括号里，填充初始化列表
+     *
+     * @param init_vals         待编译程序给出的初始化列表的一个大括号对应的AST数组
+     * @param full_init_vals    待填充的初始化列表
+     * @param is_first          是否是第一个大括号
+     * @return int              该大括号负责初始化的长度
+     */
+    int fill_init_vals(const std::vector<std::unique_ptr<InitValAST>>
+                           &init_vals,
+                       std::vector<std::string> &full_init_vals, bool is_first = false);
+
+    /**
+     * @brief 当前已填充长度的对齐值，即当前大括号负责初始化的长度
+     *
+     * @param len       当前已填充长度
+     * @return int      对齐值
+     */
+    int aligned_len(int len);
+
+    /**
+     * @brief 生成取数组指针和存初始值的Koopa IR
+     *
+     * @param full_init_vals    初始化列表
+     * @param symbol            指针的Koopa IR符号
+     * @param dim               当前维度
+     */
+    void get_ptr_store_val(const std::vector<std::string> &full_init_vals,
+                           const std::string &symbol, int dim);
+
+    /**
+     * @brief 输出当前大括号的初始化列表
+     *
+     * @param full_init_vals    初始化列表
+     * @param dim               当前维度
+     */
+    void print_aggr(const std::vector<std::string> &full_init_vals, int dim);
 };
 
 /**
