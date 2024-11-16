@@ -26,8 +26,9 @@ enum class SymbolTag
 {
     CONST,
     VAR,
-    VOID,
-    INT
+    VOID, // 无返回值的函数
+    INT,  // 返回类型为int的函数
+    ARRAY
 };
 
 class SymbolInfo

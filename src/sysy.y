@@ -55,10 +55,10 @@ CONTINUE
 
 // 非终结符的类型定义
 %type <ast_val> CompUnit CompUnitList Decl ConstDecl ConstDef ConstDefList 
-VarDecl VarDef VarDefList FuncDef FuncType FuncFParams FuncFParam Block 
-BlockItem BlockItemList Stmt LVal FuncRParams
-%type <exp_val> ConstInitVal InitVal Exp PrimaryExp UnaryExp MulExp AddExp 
-RelExp EqExp LAndExp LOrExp ConstExp 
+ConstExpList VarDecl VarDef VarDefList FuncDef FuncType FuncFParams FuncFParam 
+Block BlockItem BlockItemList Stmt LVal ExpList FuncRParams
+%type <exp_val> ConstInitVal ConstInitValList InitVal Exp PrimaryExp UnaryExp 
+MulExp AddExp RelExp EqExp LAndExp LOrExp ConstExp 
 %type <int_val> Number
 %type <str_val> UnaryOp
 
@@ -170,20 +170,81 @@ ConstDefList
   ;
 
 ConstDef
-  : IDENT '=' ConstInitVal {
+  : IDENT ConstExpList '=' ConstInitVal {
     dbg_printf("in ConstDef\n");
     auto ast = new ConstDefAST();
     ast->ident = *unique_ptr<string>($1);
-    ast->const_init_val = unique_ptr<ExpBaseAST>($3);
+    auto const_def = unique_ptr<ConstDefAST>((ConstDefAST*)($2));
+    for(auto &item : const_def->const_exps)
+    {
+      ast->const_exps.emplace_back(move(item));
+    }
+    ast->const_init_val = unique_ptr<ConstInitValAST>((ConstInitValAST*)($4));
     $$ = ast;
   }
   ;
+
+ConstExpList
+  : {
+    dbg_printf("in ConstExpList\n");
+    $$ = new ConstDefAST();
+  }
+  | '[' ConstExp ']' ConstExpList {
+    dbg_printf("in ConstExpList\n");
+    auto ast = new ConstDefAST();
+    ast->const_exps.emplace_back(unique_ptr<ExpBaseAST>((ExpBaseAST*)($2)));
+    auto const_exp_list = unique_ptr<ConstDefAST>((ConstDefAST*)($4));
+    for(auto &item : const_exp_list->const_exps)
+    {
+      ast->const_exps.emplace_back(move(item));
+    }
+    $$ = ast;
+  }
+
 
 ConstInitVal
   : ConstExp {
     dbg_printf("in ConstInitVal\n");
     auto ast = new ConstInitValAST();
-    ast->const_exp = unique_ptr<ExpBaseAST>($1);
+    ast->tag = ConstInitValAST::Tag::EXP;
+    ast->const_exp = unique_ptr<ExpBaseAST>((ExpBaseAST*)($1));
+    $$ = ast;
+  }
+  | '{' '}' {
+    dbg_printf("in ConstInitVal\n");
+    auto ast = new ConstInitValAST();
+    ast->tag = ConstInitValAST::Tag::VAL;
+    $$ = ast;
+  }
+  | '{' ConstInitValList '}' {
+    dbg_printf("in ConstInitVal\n");
+    auto ast = new ConstInitValAST();
+    ast->tag = ConstInitValAST::Tag::VAL;
+    auto const_init_val_list = unique_ptr<ConstInitValAST>((ConstInitValAST*)($2));
+    for(auto &item : const_init_val_list->const_init_vals)
+    {
+      ast->const_init_vals.emplace_back(move(item));
+    }
+    $$ = ast;
+  }
+  ;
+
+ConstInitValList
+  : ConstInitVal {
+    dbg_printf("in ConstInitValList\n");
+    auto ast = new ConstInitValAST();
+    ast->const_init_vals.emplace_back(unique_ptr<ConstInitValAST>((ConstInitValAST*)($1)));
+    $$ = ast;
+  }
+  | ConstInitVal ',' ConstInitValList {
+    dbg_printf("in ConstInitValList\n");
+    auto ast = new ConstInitValAST();
+    ast->const_init_vals.emplace_back(unique_ptr<ConstInitValAST>((ConstInitValAST*)($1)));
+    auto const_init_val_list = unique_ptr<ConstInitValAST>((ConstInitValAST*)($3));
+    for(auto &item : const_init_val_list->const_init_vals)
+    {
+      ast->const_init_vals.emplace_back(move(item));
+    }
     $$ = ast;
   }
   ;
@@ -457,14 +518,38 @@ Exp
   ;
 
 LVal
-  : IDENT {
+  : IDENT ExpList {
     dbg_printf("in LVal\n");
 
     auto ast = new LValAST();
     ast->ident = *unique_ptr<string>($1);
+    auto exp_list = unique_ptr<LValAST>((LValAST*)($2));
+    for(auto &exp : exp_list->exps)
+    {
+      ast->exps.emplace_back(move(exp));
+    }
     $$ = ast;
   }
   ;
+
+ExpList
+  : {
+    dbg_printf("in ExpList\n");
+
+    $$ = new LValAST();
+  }
+  | '[' Exp ']' ExpList {
+    dbg_printf("in ExpList\n");
+
+    auto ast = new LValAST();
+    ast->exps.emplace_back(unique_ptr<ExpBaseAST>($2));
+    auto exp_list = unique_ptr<LValAST>((LValAST*)($4));
+    for(auto &exp : exp_list->exps)
+    {
+      ast->exps.emplace_back(move(exp));
+    }
+    $$ = ast;
+  }
 
 PrimaryExp
   : '(' Exp ')' {

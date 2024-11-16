@@ -51,8 +51,176 @@ void ConstDefAST::Dump() const {}
 void ConstDefAST::IR()
 {
     dbg_printf("in ConstDefAST\n");
-    const_init_val->IR();
-    sym_tab.insert(ident, SymbolTag::CONST, const_init_val->symbol);
+    if (const_exps.empty())
+    {
+        const_init_val->IR();
+        sym_tab.insert(ident, SymbolTag::CONST, const_init_val->symbol);
+    }
+    else
+    {
+        auto symbol = "@" + ident + "_" + std::to_string(sym_cnt++);
+        sym_tab.insert(ident, SymbolTag::ARRAY, symbol);
+
+        for (auto &exp : const_exps)
+        {
+            exp->IR();
+        }
+
+        std::vector<std::string> full_init_vals;
+        fill_init_vals(const_init_val->const_init_vals, full_init_vals, true);
+
+        // std::cout << "full init vals: " << std::endl;
+        // for (auto &val : full_init_vals)
+        // {
+        //     std::cout << val << " ";
+        // }
+        // std::cout << std::endl;
+
+        if (sym_tab.in_global_scope())
+        {
+            std::cout << "global  " << symbol << " = alloc ";
+            for (int i = 0; i < static_cast<int>(const_exps.size()); ++i)
+            {
+                std::cout << "[";
+            }
+            std::cout << "i32";
+            for (int i = 0; i < static_cast<int>(const_exps.size()); ++i)
+            {
+                std::cout << ", " << const_exps[static_cast<int>(const_exps.size()) - i - 1]->symbol << "]";
+            }
+            std::cout << ", ";
+            print_aggr(full_init_vals, 0);
+            std::cout << std::endl;
+        }
+        else
+        {
+            std::cout << "  " << symbol << " = alloc ";
+            for (int i = 0; i < static_cast<int>(const_exps.size()); ++i)
+            {
+                std::cout << "[";
+            }
+            std::cout << "i32";
+            for (int i = 0; i < static_cast<int>(const_exps.size()); ++i)
+            {
+                std::cout << ", " << const_exps[static_cast<int>(const_exps.size()) - i - 1]->symbol << "]";
+            }
+            std::cout << std::endl;
+            get_ptr_store_val(full_init_vals, symbol, 0);
+        }
+    }
+}
+
+int ConstDefAST::fill_init_vals(const std::vector<std::unique_ptr<ConstInitValAST>>
+                                    &init_vals,
+                                std::vector<std::string> &full_init_vals,
+                                bool is_first)
+{
+    int brace_len = 1; // 当前大括号负责初始化的长度
+    if (is_first)
+    {
+        for (auto &exp : const_exps)
+        {
+            brace_len *= atoi(exp->symbol.c_str());
+        }
+    }
+    else
+    {
+        brace_len = aligned_len(static_cast<int>(full_init_vals.size()));
+    }
+    int cur_len = 0; // 当前大括号已填充长度
+
+    for (auto &val : init_vals)
+    {
+        if (val->tag == ConstInitValAST::Tag::EXP)
+        {
+            val->IR();
+            full_init_vals.emplace_back(val->symbol);
+            cur_len++;
+        }
+        else
+        {
+            cur_len += fill_init_vals(val->const_init_vals, full_init_vals);
+        }
+    }
+
+    for (; cur_len < brace_len; cur_len++)
+    {
+        full_init_vals.emplace_back("0");
+    }
+
+    return brace_len;
+}
+
+int ConstDefAST::aligned_len(int len)
+{
+    int result = 1;
+    for (auto it = const_exps.rbegin(); it != const_exps.rend() - 1; ++it)
+    {
+        auto dim_len = atoi((*it)->symbol.c_str());
+        if (len % (result * dim_len) != 0)
+        {
+            if (it == const_exps.rbegin())
+            {
+                assert(false);
+            }
+            break;
+        }
+        result *= dim_len;
+    }
+    return result;
+}
+
+void ConstDefAST::get_ptr_store_val(const std::vector<std::string> &full_init_vals,
+                                    const std::string &symbol, int dim)
+{
+    if (dim == static_cast<int>(const_exps.size()))
+    {
+        std::cout << "  store " << full_init_vals[0] << ", " << symbol << std::endl;
+        return;
+    }
+
+    auto dim_len = atoi(const_exps[dim]->symbol.c_str());
+    for (int i = 0; i < dim_len; ++i)
+    {
+        auto ptr_sym = "%ptr_" + std::to_string(sym_cnt++);
+        std::cout << "  " << ptr_sym << " = getelemptr " << symbol << ", " << i << std::endl;
+        auto next_begin_idx = full_init_vals.size() / dim_len * i;
+        auto next_end_idx = full_init_vals.size() / dim_len * (i + 1);
+        std::vector<std::string> next_init_vals(full_init_vals.begin() + next_begin_idx,
+                                                full_init_vals.begin() + next_end_idx);
+        get_ptr_store_val(next_init_vals, ptr_sym, dim + 1);
+    }
+}
+
+void ConstDefAST::print_aggr(const std::vector<std::string> &full_init_vals, int dim)
+{
+    std::cout << "{";
+    bool is_first = true;
+    auto dim_len = atoi(const_exps[dim]->symbol.c_str());
+    auto sub_brace_len = full_init_vals.size() / dim_len;
+    for (auto i = 0; i < dim_len; ++i)
+    {
+        if (is_first)
+        {
+            is_first = false;
+        }
+        else
+        {
+            std::cout << ", ";
+        }
+
+        if (dim == static_cast<int>(const_exps.size()) - 1)
+        {
+            std::cout << full_init_vals[i];
+        }
+        else
+        {
+            std::vector<std::string> sub_init_vals(full_init_vals.begin() + sub_brace_len * i,
+                                                   full_init_vals.begin() + sub_brace_len * (i + 1));
+            print_aggr(sub_init_vals, dim + 1);
+        }
+    }
+    std::cout << "}";
 }
 
 void ConstInitValAST::Dump() const {}
@@ -277,9 +445,8 @@ void StmtAST::IR()
     {
         lval->IR();
         exp->IR();
-        auto sym_info = sym_tab[lval->ident];
-        assert(sym_info->tag == SymbolTag::VAR);
-        std::cout << "  store " << exp->symbol << ", " << sym_info->symbol << std::endl;
+        assert(!lval->is_const);
+        std::cout << "  store " << exp->symbol << ", " << lval->symbol << std::endl;
         break;
     }
 
@@ -418,7 +585,41 @@ void ExpAST::IR()
 
 void LValAST::Dump() const {}
 
-void LValAST::IR() {}
+void LValAST::IR()
+{
+    dbg_printf("in LValAST\n");
+    auto sym_info = sym_tab[ident];
+    if (exps.empty())
+    {
+        is_const = sym_info->tag == SymbolTag::CONST;
+        if (is_const)
+        {
+            symbol = sym_info->symbol;
+        }
+        else
+        {
+            symbol = "%" + std::to_string(sym_cnt++);
+            std::cout << "  " << symbol << " = load " << sym_info->symbol << std::endl;
+        }
+    }
+    else
+    {
+        for (auto &exp : exps)
+        {
+            exp->IR();
+        }
+        is_const = false; // TODO 不确定
+        auto ptr_sym = sym_info->symbol;
+        for (auto &exp : exps)
+        {
+            auto next_sym = "%ptr_" + std::to_string(sym_cnt++);
+            std::cout << "  " << next_sym << " = getelemptr " << ptr_sym << ", " << exp->symbol << std::endl;
+            ptr_sym = next_sym;
+        }
+        symbol = "%" + std::to_string(sym_cnt++);
+        std::cout << "  " << symbol << " = load " << ptr_sym << std::endl;
+    }
+}
 
 void PrimaryExpAST::Dump() const
 {
@@ -449,22 +650,12 @@ void PrimaryExpAST::IR()
     }
     else if (tag == Tag::LVAL)
     {
-        // 程序没有语义错误，LVal一定在符号表中
+        // 只要程序没有语义错误，LVal就一定在符号表中
         // 看左值能不能编译期求值，如果能则symbol为其值，否则为其koopa ir符号
         // 要求符号表存左值与其值、符号
         lval->IR();
-        auto sym_info = sym_tab[lval->ident];
-        is_const = sym_info->tag == SymbolTag::CONST;
-        if (is_const)
-        {
-            symbol = sym_info->symbol;
-        }
-        else
-        {
-            symbol = "%" + std::to_string(sym_cnt++);
-            std::cout << "  " << symbol << " = load "
-                      << sym_info->symbol << std::endl;
-        }
+        is_const = lval->is_const;
+        symbol = lval->symbol;
     }
     else
     {
