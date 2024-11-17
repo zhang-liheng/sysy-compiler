@@ -5,6 +5,7 @@
 #include <unordered_map>
 #include <utility>
 #include <memory>
+#include <vector>
 #include <deque>
 #include <cassert>
 
@@ -28,16 +29,20 @@ enum class SymbolTag
     VAR,
     VOID, // 无返回值的函数
     INT,  // 返回类型为int的函数
-    ARRAY
+    ARRAY,
+    PTR
 };
 
 class SymbolInfo
 {
 public:
     SymbolTag tag;
-    std::string symbol; // koopa IR符号
+    std::string symbol;    // koopa IR符号
+    std::vector<int> dims; // 数组或数组指针的维数
 
-    SymbolInfo(const SymbolTag tag, const std::string &symbol) : tag(tag), symbol(symbol) {}
+    SymbolInfo(const SymbolTag tag, const std::string &symbol, const std::vector<int> &dims) : tag(tag), symbol(symbol), dims(dims)
+    {
+    }
 };
 
 /**
@@ -57,12 +62,13 @@ public:
      */
     void insert(const std::string &ident,
                 const SymbolTag tag,
-                const std::string &symbol)
+                const std::string &symbol,
+                const std::vector<int> &dims = {})
     {
         assert(!contains(ident));
         scope_tab.insert(std::make_pair(
             ident,
-            std::make_shared<SymbolInfo>(tag, symbol)));
+            std::make_shared<SymbolInfo>(tag, symbol, dims)));
     }
 
     /**
@@ -139,10 +145,11 @@ public:
      */
     void insert(const std::string &ident,
                 const SymbolTag tag,
-                const std::string &symbol)
+                const std::string &symbol,
+                const std::vector<int> &dims = {})
     {
         assert(!(table.back()->contains(ident)));
-        table.back()->insert(ident, tag, symbol);
+        table.back()->insert(ident, tag, symbol, dims);
     }
 
     /**

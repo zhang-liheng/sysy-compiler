@@ -86,6 +86,7 @@ class LValAST : public ExpBaseAST
 public:
     std::string ident;
     std::vector<std::unique_ptr<ExpBaseAST>> exps;
+    std::string loc_sym;
 
     void Dump() const override;
 
@@ -324,13 +325,19 @@ public:
 };
 
 /**
- * @brief FuncFParam  ::= BType IDENT;
+ * @brief FuncFParam ::= BType IDENT ["[" "]" {"[" ConstExp "]"}];
  * BType              ::= "int";
  */
 class FuncFParamAST : public BaseAST
 {
 public:
+    enum class Tag
+    {
+        INT,
+        PTR
+    } tag;
     std::string ident;
+    std::vector<std::unique_ptr<ExpBaseAST>> const_exps;
 
     void Dump() const override;
 

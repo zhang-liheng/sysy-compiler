@@ -426,7 +426,20 @@ FuncFParam
   : INT IDENT {
     dbg_printf("in FuncFParam\n");
     auto ast = new FuncFParamAST();
+    ast->tag = FuncFParamAST::Tag::INT;
     ast->ident = *unique_ptr<string>($2);
+    $$ = ast;
+  }
+  | INT IDENT '[' ']' ConstExpList {
+    dbg_printf("in FuncFParam\n");
+    auto ast = new FuncFParamAST();
+    ast->tag = FuncFParamAST::Tag::PTR;
+    ast->ident = *unique_ptr<string>($2);
+    auto const_exp_list = unique_ptr<ConstDefAST>((ConstDefAST*)($5));
+    for(auto &item : const_exp_list->const_exps)
+    {
+      ast->const_exps.emplace_back(move(item));
+    }
     $$ = ast;
   }
   ;

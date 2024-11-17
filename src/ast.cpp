@@ -58,13 +58,15 @@ void ConstDefAST::IR()
     }
     else
     {
-        auto symbol = "@" + ident + "_" + std::to_string(sym_cnt++);
-        sym_tab.insert(ident, SymbolTag::ARRAY, symbol);
-
+        std::vector<int> dims;
         for (auto &exp : const_exps)
         {
             exp->IR();
+            dims.emplace_back(atoi(exp->symbol.c_str()));
         }
+
+        auto symbol = "@" + ident + "_" + std::to_string(sym_cnt++);
+        sym_tab.insert(ident, SymbolTag::ARRAY, symbol, dims);
 
         std::vector<std::string> full_init_vals;
         fill_init_vals(const_init_val->const_init_vals, full_init_vals, true);
@@ -273,16 +275,25 @@ void VarDefAST::IR()
     }
     else
     {
-        auto symbol = "@" + ident + "_" + std::to_string(sym_cnt++);
-        sym_tab.insert(ident, SymbolTag::ARRAY, symbol);
-
+        std::vector<int> dims;
         for (auto &exp : const_exps)
         {
             exp->IR();
+            dims.emplace_back(atoi(exp->symbol.c_str()));
         }
 
+        auto symbol = "@" + ident + "_" + std::to_string(sym_cnt++);
+        sym_tab.insert(ident, SymbolTag::ARRAY, symbol, dims);
+
         std::vector<std::string> full_init_vals;
-        fill_init_vals(init_val->init_vals, full_init_vals, true);
+        if (init_val)
+        {
+            fill_init_vals(init_val->init_vals, full_init_vals, true);
+        }
+        else
+        {
+            fill_init_vals({}, full_init_vals, true);
+        }
 
         if (sym_tab.in_global_scope())
         {
@@ -316,6 +327,7 @@ void VarDefAST::IR()
             get_ptr_store_val(full_init_vals, symbol, 0);
         }
     }
+    dbg_printf("out VarDefAST\n");
 }
 
 int VarDefAST::fill_init_vals(const std::vector<std::unique_ptr<InitValAST>>
@@ -462,7 +474,7 @@ void FuncDefAST::IR()
     assert(sym_tab.in_global_scope());
     sym_tab.insert(ident, sym_tag, symbol);
 
-    sym_tab.push();
+    sym_tab.push(); // 装函数参数符号
     std::cout << "fun " << symbol << "(";
     if (func_f_params)
     {
@@ -475,15 +487,48 @@ void FuncDefAST::IR()
     StmtAST::has_jp = false;
     if (func_f_params)
     {
-        sym_tab.push(); // 为了函数参数的符号表
+        sym_tab.push(); // 为了函数参数的符号表，装函数作用域内的符号
+        // for (auto &param : func_f_params->func_f_params)
+        // {
+        //     auto sym_info = sym_tab[param->ident];
+        //     auto symbol = "%" + param->ident + "_" + std::to_string(sym_cnt++);
+        //     sym_tab.insert(param->ident, SymbolTag::VAR, symbol);
+        //     std::cout << "  " << symbol << " = alloc i32" << std::endl;
+        //     std::cout << "  store " << sym_info->symbol
+        //               << ", " << symbol << std::endl;
+        // }
         for (auto &param : func_f_params->func_f_params)
         {
             auto sym_info = sym_tab[param->ident];
             auto symbol = "%" + param->ident + "_" + std::to_string(sym_cnt++);
-            sym_tab.insert(param->ident, SymbolTag::VAR, symbol);
-            std::cout << "  " << symbol << " = alloc i32" << std::endl;
-            std::cout << "  store " << sym_info->symbol
-                      << ", " << symbol << std::endl;
+            if (sym_info->tag == SymbolTag::VAR)
+            {
+                sym_tab.insert(param->ident, SymbolTag::VAR, symbol);
+                std::cout << "  " << symbol << " = alloc i32" << std::endl;
+                std::cout << "  store " << sym_info->symbol
+                          << ", " << symbol << std::endl;
+            }
+            else if (sym_info->tag == SymbolTag::PTR)
+            {
+                /**
+                 * 涉及数组参数的代码2
+                 * 当ident对应变量类型为int*时，dims为空vector
+                 */
+                sym_tab.insert(param->ident, SymbolTag::PTR, symbol, sym_info->dims); // 注意这里的symbol在原指针基础上加了一个*
+                std::cout << "  " << symbol << " = alloc *";
+                for (int i = 0; i < static_cast<int>(sym_info->dims.size()); ++i)
+                {
+                    std::cout << "[";
+                }
+                std::cout << "i32";
+                for (auto it = sym_info->dims.rbegin(); it != sym_info->dims.rend(); ++it)
+                {
+                    std::cout << ", " << *it << "]";
+                }
+                std::cout << std::endl;
+                std::cout << "  store " << sym_info->symbol
+                          << ", " << symbol << std::endl;
+            }
         }
     }
     block->IR();
@@ -534,9 +579,38 @@ void FuncFParamAST::Dump() const {}
 void FuncFParamAST::IR()
 {
     dbg_printf("in FuncFParamAST\n");
-    auto symbol = "@" + ident + "_" + std::to_string(sym_cnt++);
-    sym_tab.insert(ident, SymbolTag::VAR, symbol);
-    std::cout << symbol << ": i32";
+    if (tag == Tag::INT)
+    {
+        auto symbol = "@" + ident + "_" + std::to_string(sym_cnt++);
+        sym_tab.insert(ident, SymbolTag::VAR, symbol);
+        std::cout << symbol << ": i32";
+    }
+    else
+    {
+        /**
+         * 涉及数组参数的代码1
+         */
+        std::vector<int> dims;
+        for (auto &exp : const_exps)
+        {
+            exp->IR();
+            dims.emplace_back(atoi(exp->symbol.c_str()));
+        }
+
+        auto symbol = "@" + ident + "_" + std::to_string(sym_cnt++);
+        sym_tab.insert(ident, SymbolTag::PTR, symbol, dims);
+
+        std::cout << symbol << ": *";
+        for (int i = 0; i < static_cast<int>(const_exps.size()); ++i)
+        {
+            std::cout << "[";
+        }
+        std::cout << "i32";
+        for (auto it = const_exps.rbegin(); it != const_exps.rend(); ++it)
+        {
+            std::cout << ", " << (*it)->symbol << "]";
+        }
+    }
 }
 
 void BlockAST::Dump() const
@@ -600,7 +674,7 @@ void StmtAST::IR()
         lval->IR();
         exp->IR();
         assert(!lval->is_const);
-        std::cout << "  store " << exp->symbol << ", " << lval->symbol << std::endl;
+        std::cout << "  store " << exp->symbol << ", " << lval->loc_sym << std::endl;
         break;
     }
 
@@ -743,26 +817,61 @@ void LValAST::IR()
 {
     dbg_printf("in LValAST\n");
     auto sym_info = sym_tab[ident];
-    if (exps.empty())
+    // if (exps.empty())
+    // {
+    //     is_const = sym_info->tag == SymbolTag::CONST;
+    //     if (is_const)
+    //     {
+    //         symbol = sym_info->symbol;
+    //     }
+    //     else
+    //     {
+    //         symbol = "%" + std::to_string(sym_cnt++);
+    //         std::cout << "  " << symbol << " = load " << sym_info->symbol << std::endl;
+    //     }
+    // }
+    // else
+    // {
+    //     for (auto &exp : exps)
+    //     {
+    //         exp->IR();
+    //     }
+    //     is_const = false; // TODO 不确定
+    //     auto ptr_sym = sym_info->symbol;
+    //     for (auto &exp : exps)
+    //     {
+    //         auto next_sym = "%ptr_" + std::to_string(sym_cnt++);
+    //         std::cout << "  " << next_sym << " = getelemptr " << ptr_sym << ", " << exp->symbol << std::endl;
+    //         ptr_sym = next_sym;
+    //     }
+    //     symbol = "%" + std::to_string(sym_cnt++);
+    //     std::cout << "  " << symbol << " = load " << ptr_sym << std::endl;
+    // }
+    switch (sym_info->tag)
     {
-        is_const = sym_info->tag == SymbolTag::CONST;
-        if (is_const)
-        {
-            symbol = sym_info->symbol;
-        }
-        else
-        {
-            symbol = "%" + std::to_string(sym_cnt++);
-            std::cout << "  " << symbol << " = load " << sym_info->symbol << std::endl;
-        }
+    case SymbolTag::CONST:
+    {
+        is_const = true;
+        symbol = sym_info->symbol;
+        break;
     }
-    else
+    case SymbolTag::VAR:
     {
+        is_const = false;
+        symbol = "%" + std::to_string(sym_cnt++);
+        std::cout << "  " << symbol << " = load " << sym_info->symbol << std::endl;
+        loc_sym = sym_info->symbol;
+        break;
+    }
+    // 涉及数组参数的代码3
+    // 引用的数组只会是之前定义的局部和全局数组
+    case SymbolTag::ARRAY:
+    {
+        is_const = false;
         for (auto &exp : exps)
         {
             exp->IR();
         }
-        is_const = false; // TODO 不确定
         auto ptr_sym = sym_info->symbol;
         for (auto &exp : exps)
         {
@@ -771,7 +880,55 @@ void LValAST::IR()
             ptr_sym = next_sym;
         }
         symbol = "%" + std::to_string(sym_cnt++);
-        std::cout << "  " << symbol << " = load " << ptr_sym << std::endl;
+        if (exps.size() == sym_info->dims.size())
+        {
+            std::cout << "  " << symbol << " = load " << ptr_sym << std::endl;
+            loc_sym = ptr_sym;
+        }
+        else
+        {
+            std::cout << "  " << symbol << " = getelemptr " << ptr_sym << ", 0" << std::endl;
+        }
+        break;
+    }
+    case SymbolTag::PTR:
+    {
+        is_const = false;
+        if (exps.empty())
+        {
+            symbol = "%" + std::to_string(sym_cnt++);
+            std::cout << "  " << symbol << " = load " << sym_info->symbol << std::endl;
+        }
+        else
+        {
+            for (auto &exp : exps)
+            {
+                exp->IR();
+            }
+            auto ptr_sym = "%" + std::to_string(sym_cnt++);
+            std::cout << "  " << ptr_sym << " = load " << sym_info->symbol << std::endl;
+            auto next_sym = "%" + std::to_string(sym_cnt++);
+            std::cout << "  " << next_sym << " = getptr " << ptr_sym << ", " << exps[0]->symbol << std::endl;
+            ptr_sym = next_sym;
+            for (int i = 1; i < static_cast<int>(exps.size()); ++i)
+            {
+                next_sym = "%" + std::to_string(sym_cnt++);
+                std::cout << "  " << next_sym << " = getelemptr " << ptr_sym << ", " << exps[i]->symbol << std::endl;
+                ptr_sym = next_sym;
+            }
+            symbol = "%" + std::to_string(sym_cnt++);
+            if (exps.size() == sym_info->dims.size() + 1)
+            {
+                std::cout << "  " << symbol << " = load " << ptr_sym << std::endl;
+                loc_sym = ptr_sym;
+            }
+            else
+            {
+                std::cout << "  " << symbol << " = getelemptr " << ptr_sym << ", 0" << std::endl;
+            }
+        }
+        break;
+    }
     }
 }
 
@@ -1260,4 +1417,5 @@ void ConstExpAST::IR()
     exp->IR();
     is_const = exp->is_const;
     symbol = exp->symbol;
+    dbg_printf("not in ConstExpAST\n");
 }
