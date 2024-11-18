@@ -308,7 +308,14 @@ void VarDefAST::IR()
                 std::cout << ", " << const_exps[static_cast<int>(const_exps.size()) - i - 1]->symbol << "]";
             }
             std::cout << ", ";
-            print_aggr(full_init_vals, 0);
+            if (init_val)
+            {
+                print_aggr(full_init_vals, 0);
+            }
+            else
+            {
+                std::cout << "zeroinit";
+            }
             std::cout << std::endl;
         }
         else
@@ -488,15 +495,6 @@ void FuncDefAST::IR()
     if (func_f_params)
     {
         sym_tab.push(); // 为了函数参数的符号表，装函数作用域内的符号
-        // for (auto &param : func_f_params->func_f_params)
-        // {
-        //     auto sym_info = sym_tab[param->ident];
-        //     auto symbol = "%" + param->ident + "_" + std::to_string(sym_cnt++);
-        //     sym_tab.insert(param->ident, SymbolTag::VAR, symbol);
-        //     std::cout << "  " << symbol << " = alloc i32" << std::endl;
-        //     std::cout << "  store " << sym_info->symbol
-        //               << ", " << symbol << std::endl;
-        // }
         for (auto &param : func_f_params->func_f_params)
         {
             auto sym_info = sym_tab[param->ident];
@@ -536,6 +534,7 @@ void FuncDefAST::IR()
     {
         std::cout << "  ret" << std::endl;
     }
+    StmtAST::has_jp = false;
     std::cout << "}" << std::endl;
     std::cout << std::endl;
     if (func_f_params)
@@ -817,36 +816,6 @@ void LValAST::IR()
 {
     dbg_printf("in LValAST\n");
     auto sym_info = sym_tab[ident];
-    // if (exps.empty())
-    // {
-    //     is_const = sym_info->tag == SymbolTag::CONST;
-    //     if (is_const)
-    //     {
-    //         symbol = sym_info->symbol;
-    //     }
-    //     else
-    //     {
-    //         symbol = "%" + std::to_string(sym_cnt++);
-    //         std::cout << "  " << symbol << " = load " << sym_info->symbol << std::endl;
-    //     }
-    // }
-    // else
-    // {
-    //     for (auto &exp : exps)
-    //     {
-    //         exp->IR();
-    //     }
-    //     is_const = false; // TODO 不确定
-    //     auto ptr_sym = sym_info->symbol;
-    //     for (auto &exp : exps)
-    //     {
-    //         auto next_sym = "%ptr_" + std::to_string(sym_cnt++);
-    //         std::cout << "  " << next_sym << " = getelemptr " << ptr_sym << ", " << exp->symbol << std::endl;
-    //         ptr_sym = next_sym;
-    //     }
-    //     symbol = "%" + std::to_string(sym_cnt++);
-    //     std::cout << "  " << symbol << " = load " << ptr_sym << std::endl;
-    // }
     switch (sym_info->tag)
     {
     case SymbolTag::CONST:
@@ -944,7 +913,6 @@ void PrimaryExpAST::Dump() const
     {
         std::cout << number;
     }
-    // TODO
 }
 
 void PrimaryExpAST::IR()

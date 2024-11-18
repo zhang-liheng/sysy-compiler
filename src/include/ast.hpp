@@ -57,14 +57,11 @@ public:
     virtual void Dump() const = 0;
 
     /**
-     * @brief   语义分析和IR生成
+     * @brief   语义分析，生成Koopa IR，维护符号表
      *
-     * 以递归形式后序遍历AST树。
-     * 1. 调用成员AST的IR方法，该方法会设置其is_const, symbol, 符号表，生成Koopa IR
-     * 2. 设置is_const
-     * 3. 设置symbol
-     * 4. 插入符号表
-     * 5. 生成Koopa IR
+     * 1. 生成Koopa IR，即先以递归形式后序遍历AST树，调用成员AST的IR方法，
+     * 然后生成本节点的Koopa IR。
+     * 2. 把对应的Koopa IR符号插入符号表
      */
     virtual void IR() = 0;
 };
