@@ -384,10 +384,6 @@ class StmtAST : public BaseAST
 public:
     // TODO 两种设计（初始化和生成IR）方法
 
-    // 上一行Koopa IR是否是br, jump, ret等跳转语句
-    // 在Decl, Stmt这两种BlockItem生成IR前检查该值，若为true，则不生成IR
-    // 在进入下一个Decl或Stmt前确保该值正确
-    inline static bool has_jp = false;
     inline static std::stack<int> while_cnt_stk;
     enum class Tag
     {

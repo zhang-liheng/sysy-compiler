@@ -1,6 +1,13 @@
 #include "include/ast.hpp"
 #include "include/symtab.hpp"
 
+// 上一行Koopa IR是否是br, jump, ret等跳转语句
+// 在Decl, Stmt这两种BlockItem生成IR前检查该值，若为true，则不生成IR
+// 在进入下一个Decl或Stmt前确保该值正确设置
+static bool has_jp = false;
+
+static bool is_int_func = false;
+
 static int sym_cnt = 0;
 
 static SymbolTable sym_tab;
@@ -30,7 +37,7 @@ void CompUnitAST::IR()
 void DeclAST::IR()
 {
     dbg_printf("in DeclAST\n");
-    if (StmtAST::has_jp)
+    if (has_jp)
     {
         return;
     }
@@ -463,6 +470,11 @@ void InitValAST::IR()
 void FuncDefAST::IR()
 {
     dbg_printf("in FuncDefAST\n");
+    has_jp = false;
+    if (func_type->type == FuncTypeAST::Type::INT)
+    {
+        is_int_func = true;
+    }
     auto symbol = "@" + ident;
     if (ident != "main")
     {
@@ -483,7 +495,6 @@ void FuncDefAST::IR()
     func_type->IR();
     std::cout << " {" << std::endl;
     std::cout << "%entry:" << std::endl;
-    StmtAST::has_jp = false;
     if (func_f_params)
     {
         sym_tab.push(); // 为了函数参数的符号表，装函数作用域内的符号
@@ -522,11 +533,17 @@ void FuncDefAST::IR()
         }
     }
     block->IR();
-    if (!StmtAST::has_jp) // TODO int函数要补成return 0
+    if (!has_jp) // TODO int函数要补成return 0
     {
-        std::cout << "  ret" << std::endl;
+        if (func_type->type == FuncTypeAST::Type::INT)
+        {
+            std::cout << "  ret 0" << std::endl;
+        }
+        else
+        {
+            std::cout << "  ret" << std::endl;
+        }
     }
-    StmtAST::has_jp = false;
     std::cout << "}" << std::endl;
     std::cout << std::endl;
     if (func_f_params)
@@ -534,6 +551,8 @@ void FuncDefAST::IR()
         sym_tab.pop();
     }
     sym_tab.pop();
+    has_jp = false;
+    is_int_func = false;
 }
 
 void FuncTypeAST::IR()
@@ -705,6 +724,7 @@ void StmtAST::IR()
         std::cout << std::endl;
         std::cout << "%while_entry_" << cur_sym_cnt << ":" << std::endl;
         while_cnt_stk.push(cur_sym_cnt);
+        has_jp = false;
         exp->IR();
         std::cout << "  br " << exp->symbol
                   << ", %while_body_" << cur_sym_cnt
@@ -751,7 +771,14 @@ void StmtAST::IR()
         }
         else
         {
-            std::cout << "  ret" << std::endl; // TODO int函数要补成return 0
+            if (is_int_func)
+            {
+                std::cout << "  ret 0" << std::endl;
+            }
+            else
+            {
+                std::cout << "  ret" << std::endl;
+            }
         }
         std::cout << std::endl;
         has_jp = true;
@@ -1200,6 +1227,10 @@ void LAndExpAST::IR()
         }
         else
         {
+            if (has_jp)
+            {
+                return;
+            }
             is_const = false;
             auto cur_sym_cnt = sym_cnt++;
             auto res_sym = "%land_res_" + std::to_string(sym_cnt++);
@@ -1272,6 +1303,10 @@ void LOrExpAST::IR()
         }
         else
         {
+            if (has_jp)
+            {
+                return;
+            }
             is_const = false;
             auto cur_sym_cnt = sym_cnt++;
             auto res_sym = "%lor_res_" + std::to_string(sym_cnt++);
