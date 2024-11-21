@@ -18,8 +18,6 @@ void decl_IR()
     std::cout << std::endl;
 }
 
-void CompUnitAST::Dump() const {}
-
 void CompUnitAST::IR()
 {
     dbg_printf("in CompUnitAST\n");
@@ -28,8 +26,6 @@ void CompUnitAST::IR()
         unit->IR();
     }
 }
-
-void DeclAST::Dump() const {}
 
 void DeclAST::IR()
 {
@@ -48,8 +44,6 @@ void DeclAST::IR()
     }
 }
 
-void ConstDeclAST::Dump() const {}
-
 void ConstDeclAST::IR()
 {
     dbg_printf("in ConstDeclAST\n");
@@ -58,8 +52,6 @@ void ConstDeclAST::IR()
         def->IR();
     }
 }
-
-void ConstDefAST::Dump() const {}
 
 void ConstDefAST::IR()
 {
@@ -231,8 +223,6 @@ void ConstDefAST::print_aggr(const std::vector<std::string> &full_init_vals, int
     std::cout << "}";
 }
 
-void ConstInitValAST::Dump() const {}
-
 void ConstInitValAST::IR()
 {
     dbg_printf("in ConstInitValAST\n");
@@ -240,8 +230,6 @@ void ConstInitValAST::IR()
     is_const = const_exp->is_const;
     symbol = const_exp->symbol;
 }
-
-void VarDeclAST::Dump() const {}
 
 void VarDeclAST::IR()
 {
@@ -251,8 +239,6 @@ void VarDeclAST::IR()
         def->IR();
     }
 }
-
-void VarDefAST::Dump() const {}
 
 void VarDefAST::IR()
 {
@@ -466,22 +452,12 @@ void VarDefAST::print_aggr(const std::vector<std::string> &full_init_vals, int d
     std::cout << "}";
 }
 
-void InitValAST::Dump() const {}
-
 void InitValAST::IR()
 {
     dbg_printf("in InitValAST\n");
     exp->IR();
     is_const = exp->is_const;
     symbol = exp->symbol;
-}
-
-void FuncDefAST::Dump() const
-{
-    std::cout << "FuncDefAST { ";
-    std::cout << ", " << ident << ", ";
-    block->Dump();
-    std::cout << "}";
 }
 
 void FuncDefAST::IR()
@@ -560,16 +536,12 @@ void FuncDefAST::IR()
     sym_tab.pop();
 }
 
-void FuncTypeAST::Dump() const {}
-
 void FuncTypeAST::IR()
 {
     dbg_printf("in FuncTypeAST\n");
     std::cout << type_ir[type];
     dbg_printf("not in FuncTypeAST\n");
 }
-
-void FuncFParamsAST::Dump() const {}
 
 void FuncFParamsAST::IR()
 {
@@ -588,8 +560,6 @@ void FuncFParamsAST::IR()
         param->IR();
     }
 }
-
-void FuncFParamAST::Dump() const {}
 
 void FuncFParamAST::IR()
 {
@@ -628,16 +598,6 @@ void FuncFParamAST::IR()
     }
 }
 
-void BlockAST::Dump() const
-{
-    std::cout << "BlockAST { ";
-    for (auto &item : block_items)
-    {
-        item->Dump();
-    }
-    std::cout << " }";
-}
-
 void BlockAST::IR()
 {
     dbg_printf("in BlockAST\n");
@@ -648,8 +608,6 @@ void BlockAST::IR()
     }
     sym_tab.pop();
 }
-
-void BlockItemAST::Dump() const {}
 
 void BlockItemAST::IR()
 {
@@ -665,13 +623,6 @@ void BlockItemAST::IR()
     default:
         assert(false);
     }
-}
-
-void StmtAST::Dump() const
-{
-    std::cout << "StmtAST { ";
-    exp->Dump();
-    std::cout << " }";
 }
 
 void StmtAST::IR()
@@ -812,11 +763,6 @@ void StmtAST::IR()
     }
 }
 
-void ExpAST::Dump() const
-{
-    lor_exp->Dump();
-}
-
 void ExpAST::IR()
 {
     dbg_printf("in ExpAST\n");
@@ -825,8 +771,6 @@ void ExpAST::IR()
     symbol = lor_exp->symbol;
     dbg_printf("not in exp\n");
 }
-
-void LValAST::Dump() const {}
 
 void LValAST::IR()
 {
@@ -917,20 +861,6 @@ void LValAST::IR()
     }
 }
 
-void PrimaryExpAST::Dump() const
-{
-    if (tag == Tag::EXP)
-    {
-        std::cout << "(";
-        exp->Dump();
-        std::cout << ")";
-    }
-    else if (tag == Tag::NUMBER)
-    {
-        std::cout << number;
-    }
-}
-
 void PrimaryExpAST::IR()
 {
     dbg_printf("in PrimaryExpAST\n");
@@ -959,19 +889,6 @@ void PrimaryExpAST::IR()
         symbol = std::to_string(number);
     }
     dbg_printf("not here\n");
-}
-
-void UnaryExpAST::Dump() const
-{
-    if (tag == Tag::PRIMARY)
-    {
-        primary_exp->Dump();
-    }
-    else
-    {
-        std::cout << unary_op << " ";
-        unary_exp->Dump();
-    }
 }
 
 void UnaryExpAST::IR()
@@ -1067,8 +984,6 @@ void UnaryExpAST::IR()
     dbg_printf("not in unary\n");
 }
 
-void FuncRParamsAST::Dump() const {}
-
 void FuncRParamsAST::IR()
 {
     dbg_printf("in FuncRParamsAST\n");
@@ -1077,8 +992,6 @@ void FuncRParamsAST::IR()
         exp->IR();
     }
 }
-
-void MulExpAST::Dump() const {}
 
 void MulExpAST::IR()
 {
@@ -1122,8 +1035,6 @@ void MulExpAST::IR()
     dbg_printf("not in mul\n");
 }
 
-void AddExpAST::Dump() const {}
-
 void AddExpAST::IR()
 {
     dbg_printf("in AddExpAST\n");
@@ -1160,8 +1071,6 @@ void AddExpAST::IR()
     }
     dbg_printf("not in add\n");
 }
-
-void RelExpAST::Dump() const {}
 
 void RelExpAST::IR()
 {
@@ -1207,8 +1116,6 @@ void RelExpAST::IR()
     }
 }
 
-void EqExpAST::Dump() const {}
-
 void EqExpAST::IR()
 {
     dbg_printf("in EqExpAST\n");
@@ -1244,8 +1151,6 @@ void EqExpAST::IR()
         }
     }
 }
-
-void LAndExpAST::Dump() const {}
 
 void LAndExpAST::IR()
 {
@@ -1319,8 +1224,6 @@ void LAndExpAST::IR()
     }
 }
 
-void LOrExpAST::Dump() const {}
-
 void LOrExpAST::IR()
 {
     dbg_printf("in LOrExpAST\n");
@@ -1392,8 +1295,6 @@ void LOrExpAST::IR()
         }
     }
 }
-
-void ConstExpAST::Dump() const {}
 
 void ConstExpAST::IR()
 {

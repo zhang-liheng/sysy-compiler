@@ -53,11 +53,6 @@ public:
     virtual ~BaseAST() = default;
 
     /**
-     * @brief 按照官方文档的写法，输出AST的结构，基本没用，没有实现
-     */
-    virtual void Dump() const = 0;
-
-    /**
      * @brief   语义分析，生成Koopa IR，维护符号表
      *
      * 1. 生成Koopa IR，即先以递归形式后序遍历AST树，调用成员AST的IR方法，
@@ -86,8 +81,6 @@ public:
     std::vector<std::unique_ptr<ExpBaseAST>> exps;
     std::string loc_sym;
 
-    void Dump() const override;
-
     void IR() override;
 };
 
@@ -98,8 +91,6 @@ class CompUnitAST : public BaseAST
 {
 public:
     std::vector<std::unique_ptr<BaseAST>> comp_units;
-
-    void Dump() const override;
 
     void IR() override;
 };
@@ -118,8 +109,6 @@ public:
     std::unique_ptr<BaseAST> const_decl;
     std::unique_ptr<BaseAST> var_decl;
 
-    void Dump() const override;
-
     void IR() override;
 };
 
@@ -133,8 +122,6 @@ class ConstDeclAST : public BaseAST
 {
 public:
     std::vector<std::unique_ptr<BaseAST>> const_defs;
-
-    void Dump() const override;
 
     void IR() override;
 };
@@ -152,8 +139,6 @@ public:
     } tag;
     std::unique_ptr<ExpBaseAST> const_exp;
     std::vector<std::unique_ptr<ConstInitValAST>> const_init_vals;
-
-    void Dump() const override;
 
     void IR() override;
 };
@@ -173,8 +158,6 @@ public:
     std::string ident;
     std::vector<std::unique_ptr<ExpBaseAST>> const_exps;
     std::unique_ptr<ConstInitValAST> const_init_val;
-
-    void Dump() const override;
 
     void IR() override;
 
@@ -226,8 +209,6 @@ class VarDeclAST : public BaseAST
 public:
     std::vector<std::unique_ptr<BaseAST>> var_defs;
 
-    void Dump() const override;
-
     void IR() override;
 };
 
@@ -245,8 +226,6 @@ public:
     std::unique_ptr<ExpBaseAST> exp;
     std::vector<std::unique_ptr<InitValAST>> init_vals;
 
-    void Dump() const override;
-
     void IR() override;
 };
 
@@ -260,8 +239,6 @@ public:
     std::string ident;
     std::vector<std::unique_ptr<ExpBaseAST>> const_exps;
     std::unique_ptr<InitValAST> init_val;
-
-    void Dump() const override;
 
     void IR() override;
 
@@ -317,8 +294,6 @@ public:
         INT
     } type;
 
-    void Dump() const override;
-
     void IR() override;
 };
 
@@ -337,8 +312,6 @@ public:
     std::string ident;
     std::vector<std::unique_ptr<ExpBaseAST>> const_exps;
 
-    void Dump() const override;
-
     void IR() override;
 };
 
@@ -349,8 +322,6 @@ class FuncFParamsAST : public BaseAST
 {
 public:
     std::vector<std::unique_ptr<FuncFParamAST>> func_f_params;
-
-    void Dump() const override;
 
     void IR() override;
 };
@@ -367,8 +338,6 @@ public:
     std::unique_ptr<FuncFParamsAST> func_f_params;
     std::unique_ptr<BaseAST> block;
 
-    void Dump() const override;
-
     void IR() override;
 };
 
@@ -379,8 +348,6 @@ class BlockAST : public BaseAST
 {
 public:
     std::vector<std::unique_ptr<BaseAST>> block_items;
-
-    void Dump() const override;
 
     void IR() override;
 };
@@ -398,8 +365,6 @@ public:
     } tag;
     std::unique_ptr<BaseAST> decl;
     std::unique_ptr<BaseAST> stmt;
-
-    void Dump() const override;
 
     void IR() override;
 };
@@ -442,8 +407,6 @@ public:
     std::unique_ptr<BaseAST> else_stmt;
     std::unique_ptr<BaseAST> while_stmt;
 
-    void Dump() const override;
-
     void IR() override;
 };
 
@@ -454,8 +417,6 @@ class ExpAST : public ExpBaseAST
 {
 public:
     std::unique_ptr<ExpBaseAST> lor_exp;
-
-    void Dump() const override;
 
     void IR() override;
 };
@@ -478,8 +439,6 @@ public:
 
     PrimaryExpAST(Tag tag) : tag(tag) {}
 
-    void Dump() const override;
-
     void IR() override;
 };
 
@@ -490,8 +449,6 @@ class FuncRParamsAST : public BaseAST
 {
 public:
     std::vector<std::unique_ptr<ExpBaseAST>> exps;
-
-    void Dump() const override;
 
     void IR() override;
 };
@@ -521,8 +478,6 @@ public:
 
     UnaryExpAST(Tag tag) : tag(tag) {}
 
-    void Dump() const override;
-
     void IR() override;
 };
 
@@ -547,8 +502,6 @@ public:
 
     MulExpAST(Tag tag) : tag(tag) {}
 
-    void Dump() const override;
-
     void IR() override;
 };
 
@@ -571,8 +524,6 @@ public:
     std::string op;
 
     AddExpAST(Tag tag) : tag(tag) {}
-
-    void Dump() const override;
 
     void IR() override;
 };
@@ -599,8 +550,6 @@ public:
 
     RelExpAST(Tag tag) : tag(tag) {}
 
-    void Dump() const override;
-
     void IR() override;
 };
 
@@ -623,8 +572,6 @@ public:
     std::string op;
     EqExpAST(Tag tag) : tag(tag) {}
 
-    void Dump() const override;
-
     void IR() override;
 };
 
@@ -643,8 +590,6 @@ public:
     std::unique_ptr<ExpBaseAST> land_exp;
 
     LAndExpAST(Tag tag) : tag(tag) {}
-
-    void Dump() const override;
 
     void IR() override;
 };
@@ -667,8 +612,6 @@ public:
 
     LOrExpAST(Tag tag) : tag(tag) {}
 
-    void Dump() const override;
-
     void IR() override;
 };
 
@@ -679,8 +622,6 @@ class ConstExpAST : public ExpBaseAST
 {
 public:
     std::unique_ptr<ExpBaseAST> exp;
-
-    void Dump() const override;
 
     void IR() override;
 };

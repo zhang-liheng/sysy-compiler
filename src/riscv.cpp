@@ -258,24 +258,6 @@ void Visit(const koopa_raw_basic_block_t &bb)
 // };
 void Visit(const koopa_raw_value_t &value)
 {
-    // switch (value->kind.tag)
-    // {
-    // case KOOPA_RTT_INT32:
-    //     dbg_printf("instruction kind tag = KOOPA_RTT_INT32\n");
-    //     break;
-    // case KOOPA_RTT_UNIT:
-    //     dbg_printf("instruction kind tag = KOOPA_RTT_UNIT\n");
-    //     break;
-    // case KOOPA_RTT_ARRAY:
-    //     dbg_printf("instruction kind tag = KOOPA_RTT_ARRAY\n");
-    //     break;
-    // case KOOPA_RTT_POINTER:
-    //     dbg_printf("instruction kind tag = KOOPA_RTT_POINTER\n");
-    //     break;
-    // case KOOPA_RTT_FUNCTION:
-    //     dbg_printf("instruction kind tag = KOOPA_RTT_FUNCTION\n");
-    //     break;
-    // }
     // dbg_printf("instruction name = %s\n", value->name);
     // 根据指令类型判断后续需要如何访问
     const auto &kind = value->kind;
@@ -835,6 +817,86 @@ void Visit(const koopa_raw_get_elem_ptr_t &get_elem_ptr)
     }
 }
 
+void VisitGlobalAlloc(const koopa_raw_value_t value)
+{
+    std::cout << "  .data" << std::endl;
+    std::cout << "  .globl " << value->name + 1 << std::endl;
+    std::cout << value->name + 1 << ":" << std::endl;
+    auto init = value->kind.data.global_alloc.init;
+    auto data_type = value->ty->data.pointer.base;
+    switch (init->kind.tag)
+    {
+    case KOOPA_RVT_ZERO_INIT:
+    {
+        std::cout << "  .zero " << SizeOfType(init->ty) << std::endl;
+        break;
+    }
+    case KOOPA_RVT_INTEGER:
+    {
+        std::cout << "  .word " << init->kind.data.integer.value << std::endl;
+        break;
+    }
+    case KOOPA_RVT_AGGREGATE:
+    {
+        std::vector<int> init_vals;
+        GetInitVals(init, init_vals);
+        int zero_cnt = 0;
+        for (auto &val : init_vals)
+        {
+            if (val == 0)
+            {
+                zero_cnt++;
+            }
+            else
+            {
+                if (zero_cnt > 0)
+                {
+                    std::cout << "  .zero " << zero_cnt * 4 << std::endl;
+                    zero_cnt = 0;
+                }
+                std::cout << "  .word " << val << std::endl;
+            }
+        }
+        if (zero_cnt > 0)
+        {
+            std::cout << "  .zero " << zero_cnt * 4 << std::endl;
+        }
+        break;
+    }
+    default:
+    {
+        assert(false);
+    }
+    }
+    std::cout << std::endl;
+}
+
+void GetInitVals(const koopa_raw_value_t &init, std::vector<int> &vals)
+{
+    koopa_raw_slice_t elems = init->kind.data.aggregate.elems;
+    for (int i = 0; i < elems.len; ++i)
+    {
+        auto elem = reinterpret_cast<koopa_raw_value_t>(elems.buffer[i]);
+        switch (elem->kind.tag)
+        {
+        case KOOPA_RVT_INTEGER:
+        {
+            vals.push_back(elem->kind.data.integer.value);
+            break;
+        }
+        case KOOPA_RVT_AGGREGATE:
+        {
+            GetInitVals(elem, vals);
+            break;
+        }
+        default:
+        {
+            assert(false);
+        }
+        }
+    }
+}
+
 void Prologue()
 {
     // 分配栈帧，当立即数位于[-2048, 2047]时，使用addi指令，否则使用li指令和add指令
@@ -996,85 +1058,4 @@ void Store(const std::string &src, const koopa_raw_value_t &dest)
     }
     }
 }
-
-void VisitGlobalAlloc(const koopa_raw_value_t value)
-{
-    std::cout << "  .data" << std::endl;
-    std::cout << "  .globl " << value->name + 1 << std::endl;
-    std::cout << value->name + 1 << ":" << std::endl;
-    auto init = value->kind.data.global_alloc.init;
-    auto data_type = value->ty->data.pointer.base;
-    switch (init->kind.tag)
-    {
-    case KOOPA_RVT_ZERO_INIT:
-    {
-        std::cout << "  .zero " << SizeOfType(init->ty) << std::endl;
-        break;
-    }
-    case KOOPA_RVT_INTEGER:
-    {
-        std::cout << "  .word " << init->kind.data.integer.value << std::endl;
-        break;
-    }
-    case KOOPA_RVT_AGGREGATE:
-    {
-        std::vector<int> init_vals;
-        GetInitVals(init, init_vals);
-        int zero_cnt = 0;
-        for (auto &val : init_vals)
-        {
-            if (val == 0)
-            {
-                zero_cnt++;
-            }
-            else
-            {
-                if (zero_cnt > 0)
-                {
-                    std::cout << "  .zero " << zero_cnt * 4 << std::endl;
-                    zero_cnt = 0;
-                }
-                std::cout << "  .word " << val << std::endl;
-            }
-        }
-        if (zero_cnt > 0)
-        {
-            std::cout << "  .zero " << zero_cnt * 4 << std::endl;
-        }
-        break;
-    }
-    default:
-    {
-        assert(false);
-    }
-    }
-    std::cout << std::endl;
-}
-
-void GetInitVals(const koopa_raw_value_t &init, std::vector<int> &vals)
-{
-    koopa_raw_slice_t elems = init->kind.data.aggregate.elems;
-    for (int i = 0; i < elems.len; ++i)
-    {
-        auto elem = reinterpret_cast<koopa_raw_value_t>(elems.buffer[i]);
-        switch (elem->kind.tag)
-        {
-        case KOOPA_RVT_INTEGER:
-        {
-            vals.push_back(elem->kind.data.integer.value);
-            break;
-        }
-        case KOOPA_RVT_AGGREGATE:
-        {
-            GetInitVals(elem, vals);
-            break;
-        }
-        default:
-        {
-            assert(false);
-        }
-        }
-    }
-}
-
 // TODO: (sp)判断封装成函数

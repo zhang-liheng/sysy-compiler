@@ -19,7 +19,6 @@ void Visit(const koopa_raw_slice_t &slice);
 void Visit(const koopa_raw_function_t &func);
 void Visit(const koopa_raw_basic_block_t &bb);
 void Visit(const koopa_raw_value_t &value);
-void Visit(const koopa_raw_global_alloc_t &alloc);
 void Visit(const koopa_raw_load_t &load);
 void Visit(const koopa_raw_store_t &store);
 void Visit(const koopa_raw_binary_t &binary);
@@ -29,13 +28,13 @@ void Visit(const koopa_raw_call_t &call);
 void Visit(const koopa_raw_return_t &ret);
 void Visit(const koopa_raw_get_ptr_t &get_ptr);
 void Visit(const koopa_raw_get_elem_ptr_t &get_elem_ptr);
+void VisitGlobalAlloc(const koopa_raw_value_t value);
+void GetInitVals(const koopa_raw_value_t &init, std::vector<int> &vals);
 void Prologue();
 void Epilogue();
 int SizeOfType(koopa_raw_type_t ty);
 void Load(const std::string &dest, const koopa_raw_value_t &src);
 void Store(const std::string &src, const koopa_raw_value_t &dest);
-void VisitGlobalAlloc(const koopa_raw_value_t value);
-void GetInitVals(const koopa_raw_value_t &init, std::vector<int> &vals);
 
 class StackInfo
 {
