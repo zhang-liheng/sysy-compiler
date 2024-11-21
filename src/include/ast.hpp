@@ -1,5 +1,4 @@
-#ifndef AST_H
-#define AST_H
+#pragma once
 
 #include <memory>
 #include <string>
@@ -685,5 +684,3 @@ public:
 
     void IR() override;
 };
-
-#endif

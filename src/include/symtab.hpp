@@ -1,5 +1,4 @@
-#ifndef SYMTAB_H
-#define SYMTAB_H
+#pragma once
 
 #include <string>
 #include <unordered_map>
@@ -218,5 +217,3 @@ public:
         return table.front()->operator[](ident);
     }
 };
-
-#endif
