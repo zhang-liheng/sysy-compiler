@@ -5,6 +5,19 @@ static int sym_cnt = 0;
 
 static SymbolTable sym_tab;
 
+void decl_IR()
+{
+    std::cout << "decl @getint(): i32" << std::endl;
+    std::cout << "decl @getch(): i32" << std::endl;
+    std::cout << "decl @getarray(*i32): i32" << std::endl;
+    std::cout << "decl @putint(i32)" << std::endl;
+    std::cout << "decl @putch(i32)" << std::endl;
+    std::cout << "decl @putarray(i32, *i32)" << std::endl;
+    std::cout << "decl @starttime()" << std::endl;
+    std::cout << "decl @stoptime()" << std::endl;
+    std::cout << std::endl;
+}
+
 void CompUnitAST::Dump() const {}
 
 void CompUnitAST::IR()
@@ -331,7 +344,10 @@ void VarDefAST::IR()
                 std::cout << ", " << const_exps[static_cast<int>(const_exps.size()) - i - 1]->symbol << "]";
             }
             std::cout << std::endl;
-            get_ptr_store_val(full_init_vals, symbol, 0);
+            if (init_val)
+            {
+                get_ptr_store_val(full_init_vals, symbol, 0);
+            }
         }
     }
     dbg_printf("out VarDefAST\n");

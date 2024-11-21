@@ -27,19 +27,6 @@ using namespace std;
 extern FILE *yyin;
 extern int yyparse(unique_ptr<BaseAST> &ast);
 
-void decl_IR()
-{
-    std::cout << "decl @getint(): i32" << std::endl;
-    std::cout << "decl @getch(): i32" << std::endl;
-    std::cout << "decl @getarray(*i32): i32" << std::endl;
-    std::cout << "decl @putint(i32)" << std::endl;
-    std::cout << "decl @putch(i32)" << std::endl;
-    std::cout << "decl @putarray(i32, *i32)" << std::endl;
-    std::cout << "decl @starttime()" << std::endl;
-    std::cout << "decl @stoptime()" << std::endl;
-    std::cout << std::endl;
-}
-
 int main(int argc, const char *argv[])
 {
     // 解析命令行参数. 测试脚本/评测平台要求你的编译器能接收如下参数:

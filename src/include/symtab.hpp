@@ -9,7 +9,7 @@
 #include <deque>
 #include <cassert>
 
-#define DEBUG
+// #define DEBUG
 #ifdef DEBUG
 #define dbg_printf(...) fprintf(stderr, __VA_ARGS__)
 #else

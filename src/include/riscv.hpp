@@ -10,7 +10,7 @@
 
 #include "koopa.h"
 
-#define DEBUG
+// #define DEBUG
 #ifdef DEBUG
 #define dbg_printf(...) fprintf(stderr, __VA_ARGS__)
 #else
@@ -31,12 +31,16 @@ void Visit(const koopa_raw_branch_t &branch);
 void Visit(const koopa_raw_jump_t &jump);
 void Visit(const koopa_raw_call_t &call);
 void Visit(const koopa_raw_return_t &ret);
+void Visit(const koopa_raw_get_ptr_t &get_ptr);
+void Visit(const koopa_raw_get_elem_ptr_t &get_elem_ptr);
+void VisitGlobalAlloc(const koopa_raw_value_t value);
+void GetInitVals(const koopa_raw_value_t &init, std::vector<int> &vals);
 void Load(const std::string &dest, const koopa_raw_value_t &src);
 void Store(const std::string &src, const koopa_raw_value_t &dest);
 void Prologue();
 void Epilogue();
 
-class StackManager
+class StackInfo
 {
 private:
     std::unordered_map<koopa_raw_value_t, int> val_offset;
@@ -79,13 +83,21 @@ public:
                     reinterpret_cast<koopa_raw_value_t>(insts.buffer[j]);
                 switch (inst->kind.tag)
                 {
-                // TODO 后面可能还会有其他指令
-                case KOOPA_RVT_ALLOC:
                 case KOOPA_RVT_LOAD:
                 case KOOPA_RVT_BINARY:
+                case KOOPA_RVT_GET_PTR:
+                case KOOPA_RVT_GET_ELEM_PTR:
                 {
                     val_offset[inst] = S + A;
                     S += 4;
+                    break;
+                }
+                case KOOPA_RVT_ALLOC:
+                {
+                    auto alloced_data = inst->ty->data.pointer.base;
+                    auto data_size = size_of_type(alloced_data);
+                    val_offset[inst] = S + A;
+                    S += data_size;
                     break;
                 }
                 case KOOPA_RVT_CALL:
@@ -130,13 +142,33 @@ public:
         return stk_sz;
     }
 
-    int R_size()
+    int size_of_R()
     {
         return R;
     }
+
+    int size_of_type(koopa_raw_type_t ty)
+    {
+        switch (ty->tag)
+        {
+        case KOOPA_RTT_INT32:
+            return 4;
+        case KOOPA_RTT_UNIT:
+            return 0;
+        case KOOPA_RTT_ARRAY:
+            return ty->data.array.len * size_of_type(ty->data.array.base);
+        case KOOPA_RTT_POINTER:
+            return 4;
+        case KOOPA_RTT_FUNCTION:
+            return 0;
+        default:
+            assert(false);
+        }
+        return 0;
+    }
 };
 
-static StackManager stk;
+static StackInfo stk;
 
 void BuildRiscv(const std::string &koopa_str)
 {
@@ -350,10 +382,7 @@ void Visit(const koopa_raw_value_t &value)
     case KOOPA_RVT_GLOBAL_ALLOC:
         // 访问 global_alloc 指令
         dbg_printf("value kind = KOOPA_RVT_GLOBAL_ALLOC\n");
-        std::cout << "  .data" << std::endl;
-        std::cout << "  .globl " << value->name + 1 << std::endl;
-        std::cout << value->name + 1 << ":" << std::endl;
-        Visit(kind.data.global_alloc);
+        VisitGlobalAlloc(value);
         break;
     case KOOPA_RVT_LOAD:
         // 访问 load 指令
@@ -369,10 +398,14 @@ void Visit(const koopa_raw_value_t &value)
     case KOOPA_RVT_GET_PTR:
         // 访问 get_ptr 指令
         dbg_printf("value kind = KOOPA_RVT_GET_PTR\n");
+        Visit(kind.data.get_ptr);
+        Store("t0", value);
         break;
     case KOOPA_RVT_GET_ELEM_PTR:
         // 访问 get_elem_ptr 指令
         dbg_printf("value kind = KOOPA_RVT_GET_ELEM_PTR\n");
+        Visit(kind.data.get_elem_ptr);
+        Store("t0", value);
         break;
     case KOOPA_RVT_BINARY:
         // 访问 binary 指令
@@ -411,37 +444,78 @@ void Visit(const koopa_raw_value_t &value)
         // 其他类型暂时遇不到
         assert(false);
     }
-}
-
-// 访问全局变量
-void Visit(const koopa_raw_global_alloc_t &alloc)
-{
-    // 访问全局变量
-    // dbg_printf("global_alloc name = %s\n", alloc->name);
-
-    if (alloc.init->kind.tag == KOOPA_RVT_INTEGER)
-    {
-        std::cout << "  .word " << alloc.init->kind.data.integer.value << std::endl;
-    }
-    else
-    {
-        assert(alloc.init->kind.tag == KOOPA_RVT_ZERO_INIT);
-        std::cout << "  .zero 4" << std::endl;
-    }
-    std::cout << std::endl;
+    // std::cout << "----------------------------------------" << std::endl;
 }
 
 // 访问 load 指令
 void Visit(const koopa_raw_load_t &load)
 {
-    Load("t0", load.src);
+    switch (load.src->kind.tag)
+    {
+    case KOOPA_RVT_GLOBAL_ALLOC:
+    case KOOPA_RVT_ALLOC:
+    {
+        Load("t0", load.src);
+        break;
+    }
+    case KOOPA_RVT_GET_ELEM_PTR:
+    case KOOPA_RVT_GET_PTR:
+    {
+        auto offset = stk.offset(load.src);
+        if (offset > 2047)
+        {
+            std::cout << "  li t3, " << offset << std::endl;
+            std::cout << "  add t3, sp, t3" << std::endl;
+            std::cout << "  lw t3, 0(t3)" << std::endl;
+        }
+        else
+        {
+            std::cout << "  lw t3, " << offset << "(sp)" << std::endl;
+        }
+        std::cout << "  lw t0, 0(t3)" << std::endl;
+        break;
+    }
+    default:
+    {
+        assert(false);
+    }
+    }
 }
 
 // 访问 store 指令
 void Visit(const koopa_raw_store_t &store)
 {
     Load("t0", store.value);
-    Store("t0", store.dest);
+    switch (store.dest->kind.tag)
+    {
+    case KOOPA_RVT_GLOBAL_ALLOC:
+    case KOOPA_RVT_ALLOC:
+    {
+        Store("t0", store.dest);
+        break;
+    }
+    case KOOPA_RVT_GET_ELEM_PTR:
+    case KOOPA_RVT_GET_PTR:
+    {
+        auto offset = stk.offset(store.dest);
+        if (offset > 2047)
+        {
+            std::cout << "  li t3, " << offset << std::endl;
+            std::cout << "  add t3, sp, t3" << std::endl;
+            std::cout << "  lw t3, 0(t3)" << std::endl;
+        }
+        else
+        {
+            std::cout << "  lw t3, " << offset << "(sp)" << std::endl;
+        }
+        std::cout << "  sw t0, 0(t3)" << std::endl;
+        break;
+    }
+    default:
+    {
+        assert(false);
+    }
+    }
 }
 
 // 访问二元运算
@@ -581,7 +655,6 @@ void Visit(const koopa_raw_call_t &call)
     std::cout << "  call " << call.callee->name + 1 << std::endl;
 }
 
-// 访问对应类型指令的函数
 void Visit(const koopa_raw_return_t &ret)
 {
     // return 指令中, value 代表返回值
@@ -593,6 +666,348 @@ void Visit(const koopa_raw_return_t &ret)
     }
 
     Epilogue();
+}
+
+void Visit(const koopa_raw_get_ptr_t &get_ptr)
+{
+    if (get_ptr.index->kind.tag == KOOPA_RVT_INTEGER)
+    {
+        auto elem_index = get_ptr.index->kind.data.integer.value;
+        switch (get_ptr.src->kind.tag)
+        {
+        case KOOPA_RVT_GLOBAL_ALLOC:
+        {
+            std::cout << "  la t0, " << get_ptr.src->name + 1 << std::endl;
+            auto elem_size = stk.size_of_type(get_ptr.src->ty->data.pointer.base);
+            auto elem_offset = elem_size * elem_index;
+            if (elem_offset > 2047)
+            {
+                std::cout << "  li t1, " << elem_offset << std::endl;
+                std::cout << "  add t0, t0, t1" << std::endl;
+            }
+            else
+            {
+                std::cout << "  addi t0, t0, " << elem_offset << std::endl;
+            }
+            break;
+        }
+        case KOOPA_RVT_LOAD:
+        case KOOPA_RVT_ALLOC:
+        case KOOPA_RVT_GET_PTR:
+        case KOOPA_RVT_GET_ELEM_PTR:
+        {
+            int offset = stk.offset(get_ptr.src);
+            if (offset > 2047)
+            {
+                std::cout << "  li t0, " << offset << std::endl;
+                std::cout << "  add t0, sp, t0" << std::endl;
+                std::cout << "  lw t0, 0(t0)" << std::endl;
+            }
+            else
+            {
+                std::cout << "  lw t0, " << offset << "(sp)" << std::endl;
+            }
+            auto elem_size = stk.size_of_type(get_ptr.src->ty->data.pointer.base);
+            auto elem_offset = elem_size * elem_index;
+            if (elem_offset > 2047)
+            {
+                std::cout << "  li t1, " << elem_offset << std::endl;
+                std::cout << "  add t0, t0, t1" << std::endl;
+            }
+            else
+            {
+                std::cout << "  addi t0, t0, " << elem_offset << std::endl;
+            }
+            break;
+        }
+        default:
+        {
+            assert(false);
+        }
+        }
+    }
+    else
+    {
+        auto index_offset = stk.offset(get_ptr.index);
+        if (index_offset > 2047)
+        {
+            std::cout << "  li t3, " << index_offset << std::endl;
+            std::cout << "  add t3, sp, t3" << std::endl;
+            std::cout << "  lw t3, 0(t3)" << std::endl;
+        }
+        else
+        {
+            std::cout << "  lw t3, " << index_offset << "(sp)" << std::endl;
+        }
+        auto elem_size = stk.size_of_type(get_ptr.src->ty->data.pointer.base);
+        std::cout << "  li t2, " << elem_size << std::endl;
+        std::cout << "  mul t3, t3, t2" << std::endl;
+        switch (get_ptr.src->kind.tag)
+        {
+        case KOOPA_RVT_GLOBAL_ALLOC:
+        {
+            std::cout << "  la t0, " << get_ptr.src->name + 1 << std::endl;
+            std::cout << "  add t0, t0, t3" << std::endl;
+            break;
+        }
+        case KOOPA_RVT_LOAD:
+        case KOOPA_RVT_ALLOC:
+        case KOOPA_RVT_GET_PTR:
+        case KOOPA_RVT_GET_ELEM_PTR:
+        {
+            auto offset = stk.offset(get_ptr.src);
+            if (offset > 2047)
+            {
+                std::cout << "  li t0, " << offset << std::endl;
+                std::cout << "  add t0, sp, t0" << std::endl;
+                std::cout << "  lw t0, 0(t0)" << std::endl;
+            }
+            else
+            {
+                std::cout << "  lw t0, " << offset << "(sp)" << std::endl;
+            }
+            std::cout << "  add t0, t0, t3" << std::endl;
+            break;
+        }
+        default:
+        {
+            assert(false);
+        }
+        }
+    }
+}
+
+void Visit(const koopa_raw_get_elem_ptr_t &get_elem_ptr)
+{
+    if (get_elem_ptr.index->kind.tag == KOOPA_RVT_INTEGER)
+    {
+        auto elem_index = get_elem_ptr.index->kind.data.integer.value;
+        switch (get_elem_ptr.src->kind.tag)
+        {
+        case KOOPA_RVT_GLOBAL_ALLOC:
+        {
+            std::cout << "  la t0, " << get_elem_ptr.src->name + 1 << std::endl;
+            auto elem_size = stk.size_of_type(get_elem_ptr.src->ty->data.pointer.base->data.array.base);
+            auto elem_offset = elem_size * elem_index;
+            if (elem_offset > 2047)
+            {
+                std::cout << "  li t1, " << elem_offset << std::endl;
+                std::cout << "  add t0, t0, t1" << std::endl;
+            }
+            else
+            {
+                std::cout << "  addi t0, t0, " << elem_offset << std::endl;
+            }
+            break;
+        }
+        case KOOPA_RVT_ALLOC:
+        {
+            auto inst_src_offset = stk.offset(get_elem_ptr.src);
+            auto elem_size = stk.size_of_type(get_elem_ptr.src->ty->data.pointer.base->data.array.base);
+            auto inst_dest_offset = inst_src_offset + elem_size * elem_index;
+            if (inst_dest_offset > 2047)
+            {
+                std::cout << "  li t0, " << inst_dest_offset << std::endl;
+                std::cout << "  add t0, sp, t0" << std::endl;
+            }
+            else
+            {
+                std::cout << "  addi t0, sp, " << inst_dest_offset << std::endl;
+            }
+            break;
+        }
+        case KOOPA_RVT_GET_ELEM_PTR:
+        case KOOPA_RVT_GET_PTR:
+        {
+            auto offset = stk.offset(get_elem_ptr.src);
+            if (offset > 2047)
+            {
+                std::cout << "  li t1, " << offset << std::endl;
+                std::cout << "  add t1, sp, t1" << std::endl;
+                std::cout << "  lw t1, 0(t1)" << std::endl;
+            }
+            else
+            {
+                std::cout << "  lw t1, " << offset << "(sp)" << std::endl;
+            }
+            auto elem_size = stk.size_of_type(get_elem_ptr.src->ty->data.pointer.base->data.array.base);
+            auto elem_offset = elem_size * elem_index;
+            if (elem_offset > 2047)
+            {
+                std::cout << "  li t2, " << elem_offset << std::endl;
+                std::cout << "  add t0, t1, t2" << std::endl;
+            }
+            else
+            {
+                std::cout << "  addi t0, t1, " << elem_offset << std::endl;
+            }
+            break;
+        }
+        default:
+        {
+            assert(false);
+        }
+        }
+    }
+    else
+    {
+        auto index_offset = stk.offset(get_elem_ptr.index);
+        if (index_offset > 2047)
+        {
+            std::cout << "  li t3, " << index_offset << std::endl;
+            std::cout << "  add t3, sp, t3" << std::endl;
+            std::cout << "  lw t3, 0(t3)" << std::endl;
+        }
+        else
+        {
+            std::cout << "  lw t3, " << index_offset << "(sp)" << std::endl;
+        }
+        auto elem_size = stk.size_of_type(get_elem_ptr.src->ty->data.pointer.base->data.array.base);
+        std::cout << "  li t2, " << elem_size << std::endl;
+        std::cout << "  mul t3, t3, t2" << std::endl;
+        switch (get_elem_ptr.src->kind.tag)
+        {
+        case KOOPA_RVT_GLOBAL_ALLOC:
+        {
+            std::cout << "  la t0, " << get_elem_ptr.src->name + 1 << std::endl;
+            std::cout << "  add t0, t0, t3" << std::endl;
+            break;
+        }
+        case KOOPA_RVT_ALLOC:
+        {
+            auto offset = stk.offset(get_elem_ptr.src);
+            std::cout << "  add t0, t3, " << offset << std::endl;
+            std::cout << "  add t0, sp, t0" << std::endl;
+            break;
+        }
+        case KOOPA_RVT_GET_ELEM_PTR:
+        case KOOPA_RVT_GET_PTR:
+        {
+            auto offset = stk.offset(get_elem_ptr.src);
+            if (offset > 2047)
+            {
+                std::cout << "  li t1, " << offset << std::endl;
+                std::cout << "  add t1, sp, t1" << std::endl;
+                std::cout << "  lw t1, 0(t1)" << std::endl;
+            }
+            else
+            {
+                std::cout << "  lw t1, " << offset << "(sp)" << std::endl;
+            }
+            std::cout << "  add t0, t1, t3" << std::endl;
+            break;
+        }
+        default:
+        {
+            assert(false);
+        }
+        }
+    }
+}
+// // 访问全局变量
+// void Visit(const koopa_raw_global_alloc_t &alloc)
+// {
+//     // 访问全局变量
+//     // dbg_printf("global_alloc name = %s\n", alloc->name);
+
+//     // if (alloc.init->kind.tag == KOOPA_RVT_INTEGER)
+//     // {
+//     //     std::cout << "  .word " << alloc.init->kind.data.integer.value << std::endl;
+//     // }
+//     // else
+//     // {
+//     //     assert(alloc.init->kind.tag == KOOPA_RVT_ZERO_INIT);
+//     //     std::cout << "  .zero 4" << std::endl;
+//     // }
+//     switch (alloc.init->kind.tag)
+//     {
+//     case KOOPA_RVT_INTEGER:
+//         std::cout << "  .word " << alloc.init->kind.data.integer.value << std::endl;
+//         break;
+//     case KOOPA_RVT_ZERO_INIT:
+//         std::cout << "  .zero " <<
+//     }
+//     std::cout << std::endl;
+// }
+
+void VisitGlobalAlloc(const koopa_raw_value_t value)
+{
+    std::cout << "  .data" << std::endl;
+    std::cout << "  .globl " << value->name + 1 << std::endl;
+    std::cout << value->name + 1 << ":" << std::endl;
+    auto init = value->kind.data.global_alloc.init;
+    auto data_type = value->ty->data.pointer.base;
+    switch (init->kind.tag)
+    {
+    case KOOPA_RVT_ZERO_INIT:
+    {
+        std::cout << "  .zero " << stk.size_of_type(init->ty) << std::endl;
+        break;
+    }
+    case KOOPA_RVT_INTEGER:
+    {
+        std::cout << "  .word " << init->kind.data.integer.value << std::endl;
+        break;
+    }
+    case KOOPA_RVT_AGGREGATE:
+    {
+        std::vector<int> init_vals;
+        GetInitVals(init, init_vals);
+        int zero_cnt = 0;
+        for (auto &val : init_vals)
+        {
+            if (val == 0)
+            {
+                zero_cnt++;
+            }
+            else
+            {
+                if (zero_cnt > 0)
+                {
+                    std::cout << "  .zero " << zero_cnt * 4 << std::endl;
+                    zero_cnt = 0;
+                }
+                std::cout << "  .word " << val << std::endl;
+            }
+        }
+        if (zero_cnt > 0)
+        {
+            std::cout << "  .zero " << zero_cnt * 4 << std::endl;
+        }
+        break;
+    }
+    default:
+    {
+        assert(false);
+    }
+    }
+    std::cout << std::endl;
+}
+
+void GetInitVals(const koopa_raw_value_t &init, std::vector<int> &vals)
+{
+    koopa_raw_slice_t elems = init->kind.data.aggregate.elems;
+    for (int i = 0; i < elems.len; ++i)
+    {
+        auto elem = reinterpret_cast<koopa_raw_value_t>(elems.buffer[i]);
+        switch (elem->kind.tag)
+        {
+        case KOOPA_RVT_INTEGER:
+        {
+            vals.push_back(elem->kind.data.integer.value);
+            break;
+        }
+        case KOOPA_RVT_AGGREGATE:
+        {
+            GetInitVals(elem, vals);
+            break;
+        }
+        default:
+        {
+            assert(false);
+        }
+        }
+    }
 }
 
 void Load(const std::string &dest, const koopa_raw_value_t &src)
@@ -692,7 +1107,7 @@ void Prologue()
         std::cout << "  addi sp, sp, -" << stk.size() << std::endl;
     }
 
-    if (stk.R_size())
+    if (stk.size_of_R())
     {
         if (stk.size() - 4 > 2047)
         {
@@ -709,7 +1124,7 @@ void Prologue()
 
 void Epilogue()
 {
-    if (stk.R_size())
+    if (stk.size_of_R())
     {
         if (stk.size() - 4 > 2047)
         {
