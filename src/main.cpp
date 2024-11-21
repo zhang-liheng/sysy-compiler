@@ -62,7 +62,7 @@ int main(int argc, const char *argv[])
         // 恢复cout的原始缓冲区，以便恢复到标准输出
         std::cout.rdbuf(cout_buf);
     }
-    else if (!strcmp(mode, "-riscv"))
+    else if (!strcmp(mode, "-riscv") || !strcmp(mode, "-perf"))
     {
         std::stringstream ss;
         // 保存cout当前的缓冲区指针
@@ -81,7 +81,7 @@ int main(int argc, const char *argv[])
     }
     else
     {
-        std::cerr << "Error: invalid mode." << std::endl;
+        assert(false);
     }
 
     return 0;
