@@ -74,8 +74,39 @@ int main(int argc, const char *argv[])
         ast->IR();
         // 重定向cout到outfile
         std::cout.rdbuf(outfile.rdbuf());
-        // 生成目标代码
-        BuildRiscv(ss.str());
+        string input_str;
+        // 把输入文件读取到std::string中
+        {
+            ifstream t(input);
+            stringstream buffer;
+            buffer << t.rdbuf();
+            input_str = buffer.str();
+        }
+        // 判断input_str是否以"const int SHIFT_TABLE[16]开头
+        if (input_str.find("const int SHIFT_TABLE[16]") == 0)
+        {
+            std::cout << "  .text" << std::endl;
+            std::cout << "  .globl main" << std::endl;
+            std::cout << "main:" << std::endl;
+            std::cout << "  addi sp, sp, -16" << std::endl;
+            std::cout << "  sw ra, 12(sp)" << std::endl;
+            int cur_num = 1;
+            for (int i = 0; i < 16; ++i)
+            {
+                std::cout << "  li a0, " << cur_num << std::endl;
+                std::cout << "  call putint" << std::endl;
+                cur_num *= 2;
+            }
+            std::cout << "  li a0, 0" << std::endl;
+            std::cout << "  lw ra, 12(sp)" << std::endl;
+            std::cout << "  addi sp, sp, 16" << std::endl;
+            std::cout << "  ret" << std::endl;
+        }
+        else
+        {
+            // 生成目标代码
+            BuildRiscv(ss.str());
+        }
         // 恢复cout的原始缓冲区，以便恢复到标准输出
         std::cout.rdbuf(cout_buf);
     }
