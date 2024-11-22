@@ -95,6 +95,8 @@ int main(int argc, const char *argv[])
             {
                 std::cout << "  li a0, " << cur_num << std::endl;
                 std::cout << "  call putint" << std::endl;
+                std::cout << "  li a0, 10" << std::endl;
+                std::cout << "  call putch" << std::endl;
                 cur_num *= 2;
             }
             std::cout << "  li a0, 0" << std::endl;
