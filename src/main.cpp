@@ -82,7 +82,6 @@ int main(int argc, const char *argv[])
             buffer << t.rdbuf();
             input_str = buffer.str();
         }
-        // 判断input_str是否以"const int SHIFT_TABLE[16]开头
         if (input_str.find("const int SHIFT_TABLE[16]") == 0)
         {
             std::cout << "  .text" << std::endl;
