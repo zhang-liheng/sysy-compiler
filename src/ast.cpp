@@ -885,6 +885,10 @@ void LValAST::IR()
         }
         break;
     }
+    default:
+    {
+        break;
+    }
     }
 }
 

@@ -824,7 +824,6 @@ void VisitGlobalAlloc(const koopa_raw_value_t value)
     std::cout << "  .globl " << value->name + 1 << std::endl;
     std::cout << value->name + 1 << ":" << std::endl;
     auto init = value->kind.data.global_alloc.init;
-    auto data_type = value->ty->data.pointer.base;
     switch (init->kind.tag)
     {
     case KOOPA_RVT_ZERO_INIT:
