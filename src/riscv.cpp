@@ -789,8 +789,16 @@ void Visit(const koopa_raw_get_elem_ptr_t &get_elem_ptr)
         case KOOPA_RVT_ALLOC:
         {
             auto offset = stk.offset(get_elem_ptr.src);
-            std::cout << "  add t0, t3, " << offset << std::endl;
-            std::cout << "  add t0, sp, t0" << std::endl;
+            if (offset > 2047)
+            {
+                std::cout << "  li t0, " << offset << std::endl;
+                std::cout << "  add t0, sp, t0" << std::endl;
+            }
+            else
+            {
+                std::cout << "  addi t0, sp, " << offset << std::endl;
+            }
+            std::cout << "  add t0, t0, t3" << std::endl;
             break;
         }
         case KOOPA_RVT_GET_ELEM_PTR:
